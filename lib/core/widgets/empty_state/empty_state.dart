@@ -34,7 +34,6 @@ class EmptyState extends StatelessWidget {
     this.fill = false,
   });
 
-  // Variants using AppColor
   factory EmptyState.error({
     required BuildContext context,
     required String title,
@@ -45,19 +44,18 @@ class EmptyState extends StatelessWidget {
     VoidCallback? onSecondaryAction,
     bool compact = false,
     bool fill = false,
-  }) =>
-      EmptyState(
-        icon: LucideIcons.alertTriangle,
-        accentColor: AppColor.of(context).error,
-        title: title,
-        message: message,
-        primaryActionLabel: primaryActionLabel,
-        onPrimaryAction: onPrimaryAction,
-        secondaryActionLabel: secondaryActionLabel,
-        onSecondaryAction: onSecondaryAction,
-        compact: compact,
-        fill: fill,
-      );
+  }) => EmptyState(
+    icon: LucideIcons.alertTriangle,
+    accentColor: AppColor.of(context).error,
+    title: title,
+    message: message,
+    primaryActionLabel: primaryActionLabel,
+    onPrimaryAction: onPrimaryAction,
+    secondaryActionLabel: secondaryActionLabel,
+    onSecondaryAction: onSecondaryAction,
+    compact: compact,
+    fill: fill,
+  );
 
   factory EmptyState.noData({
     required BuildContext context,
@@ -69,19 +67,18 @@ class EmptyState extends StatelessWidget {
     VoidCallback? onSecondaryAction,
     bool compact = false,
     bool fill = false,
-  }) =>
-      EmptyState(
-        icon: LucideIcons.inbox,
-        accentColor: AppColor.of(context).info,
-        title: title,
-        message: message,
-        primaryActionLabel: primaryActionLabel,
-        onPrimaryAction: onPrimaryAction,
-        secondaryActionLabel: secondaryActionLabel,
-        onSecondaryAction: onSecondaryAction,
-        compact: compact,
-        fill: fill,
-      );
+  }) => EmptyState(
+    icon: LucideIcons.inbox,
+    accentColor: AppColor.of(context).info,
+    title: title,
+    message: message,
+    primaryActionLabel: primaryActionLabel,
+    onPrimaryAction: onPrimaryAction,
+    secondaryActionLabel: secondaryActionLabel,
+    onSecondaryAction: onSecondaryAction,
+    compact: compact,
+    fill: fill,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -96,16 +93,16 @@ class EmptyState extends StatelessWidget {
           padding: EdgeInsets.all(basePad),
           child: Column(
             mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
-            mainAxisAlignment:
-            fill ? MainAxisAlignment.center : MainAxisAlignment.start,
+            mainAxisAlignment: fill
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
               if (illustration != null) ...[
                 Padding(
                   padding: EdgeInsets.only(bottom: basePad),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 160),
-                    child: FittedBox(
-                        fit: BoxFit.contain, child: illustration),
+                    child: FittedBox(fit: BoxFit.contain, child: illustration),
                   ),
                 ),
               ],
@@ -123,13 +120,11 @@ class EmptyState extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 message,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: colors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 14, color: colors.textSecondary),
                 textAlign: TextAlign.center,
               ),
-              if (primaryActionLabel != null || secondaryActionLabel != null) ...[
+              if (primaryActionLabel != null ||
+                  secondaryActionLabel != null) ...[
                 SizedBox(height: basePad),
                 Column(
                   children: [
@@ -140,7 +135,8 @@ class EmptyState extends StatelessWidget {
                         type: ButtonType.filled,
                         fullWidth: false,
                       ),
-                    if (secondaryActionLabel != null && onSecondaryAction != null) ...[
+                    if (secondaryActionLabel != null &&
+                        onSecondaryAction != null) ...[
                       const SizedBox(height: 12),
                       CustomButton(
                         text: secondaryActionLabel!,
@@ -177,13 +173,9 @@ class _IconBadge extends StatelessWidget {
     return Container(
       width: size + 20,
       height: size + 20,
-      decoration: BoxDecoration(
-        color: bg,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
       alignment: Alignment.center,
       child: Icon(icon, color: color, size: size),
     );
   }
 }
-

@@ -248,7 +248,12 @@ class WalletService {
     final map = _extractMap(data, keys: const ['data', 'item', 'wallet']);
     if (map != null) return WalletAddress.fromJson(map);
 
-    return WalletAddress(id: id, publicAddress: '', network: 'stellar', isActive: true);
+    return WalletAddress(
+      id: id,
+      publicAddress: '',
+      network: 'stellar',
+      isActive: true,
+    );
   }
 
   Future<WalletAddress> remove(String id) async {

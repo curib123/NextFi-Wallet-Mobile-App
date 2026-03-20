@@ -1,4 +1,3 @@
-// lib/features/price_chart/view/widgets/delta_pill.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_state.dart';
@@ -12,7 +11,7 @@ class DeltaPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
     final clr = up ? c.primary : c.error;
-    final bg  = clr.withValues(alpha: 0.12);
+    final bg = clr.withValues(alpha: 0.12);
     final icon = up ? LucideIcons.trendingUp : LucideIcons.trendingDown;
 
     return Container(
@@ -29,7 +28,11 @@ class DeltaPill extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             fmtPct(pct),
-            style: TextStyle(color: clr, fontWeight: FontWeight.w700, fontSize: 12),
+            style: TextStyle(
+              color: clr,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
           ),
         ],
       ),

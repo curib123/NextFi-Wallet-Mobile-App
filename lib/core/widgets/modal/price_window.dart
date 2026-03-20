@@ -1,4 +1,3 @@
-// lib/Screen/WalletHomeScreenWidgets/modals/price_window_modal.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';

@@ -73,7 +73,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       }
 
                       if (it.action == SettingAction.biometrics) {
-                        // Switch enabled only when device supports biometrics.
                         final isSwitchEnabled =
                             it.enabled && vm.biometricsSupported;
                         return Switch.adaptive(

@@ -22,21 +22,13 @@ class AuthService {
 
   final _statusCtrl = StreamController<AuthStatus>.broadcast();
 
-  // â”€â”€ CACHE LAYER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// In-memory user cache (survives until logout or app restart)
   User? _cachedUser;
 
-  /// Timestamp of last user fetch (for staleness check)
   DateTime? _userFetchTime;
 
-  /// Cache TTL - refresh user data after this duration
   static const _userCacheDuration = Duration(minutes: 5);
 
-  /// Fast auth state cache (avoids repeated storage reads)
   bool? _isAuthenticatedCache;
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   AuthService({
     TokenStorage? tokenStorage,
@@ -66,13 +58,11 @@ class AuthService {
       hasTokens ? AuthStatus.authenticated : AuthStatus.unauthenticated,
     );
 
-    // Pre-warm user cache if authenticated
     if (hasTokens) {
       _loadUserInBackground();
     }
   }
 
-  /// Silent background user fetch (doesn't throw errors to UI)
   void _loadUserInBackground() {
     currentUser
         .then((user) {
@@ -82,8 +72,6 @@ class AuthService {
           debugPrint('[AUTH] Background user load failed: $e');
         });
   }
-
-  // â”€â”€ Google Sign-In â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<User> signInWithGoogle() async {
     try {
@@ -134,17 +122,15 @@ class AuthService {
     }
   }
 
-  // â”€â”€ Facebook Sign-In â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<User> signInWithFacebook() async {
     try {
-      debugPrint('â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
+      debugPrint(
+        'â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”',
+      );
       debugPrint('[FACEBOOK] Starting login flow');
 
-      // â”€â”€ Ensure clean session
       await FacebookAuth.instance.logOut();
 
-      // â”€â”€ Trigger login
       final result = await FacebookAuth.instance.login(
         permissions: ['email', 'public_profile'],
         loginBehavior: LoginBehavior.nativeWithFallback,
@@ -153,7 +139,6 @@ class AuthService {
       debugPrint('[FACEBOOK] LoginStatus â†’ ${result.status}');
       debugPrint('[FACEBOOK] Message â†’ ${result.message}');
 
-      // â”€â”€ Handle login states
       if (result.status == LoginStatus.cancelled) {
         throw const AuthException('Facebook login cancelled');
       }
@@ -166,14 +151,12 @@ class AuthService {
         throw const AuthException('Facebook login unsuccessful');
       }
 
-      // â”€â”€ Extract token
       final accessToken = result.accessToken;
 
       if (accessToken == null) {
         throw const AuthException('No Facebook access token');
       }
 
-      // â”€â”€ Optional: fetch profile locally (debug help)
       try {
         final profile = await FacebookAuth.instance.getUserData(
           fields: "id,name,email,picture.width(200)",
@@ -184,7 +167,6 @@ class AuthService {
         debugPrint('[FACEBOOK] Profile fetch skipped â†’ $e');
       }
 
-      // â”€â”€ Send token to backend
       debugPrint('[FACEBOOK] Sending token to backend...');
 
       final json = await _http.post(
@@ -195,16 +177,11 @@ class AuthService {
 
       debugPrint('[FACEBOOK] Backend response â†’ $json');
 
-      // â”€â”€ Handle auth response
       return await _handleAuthResponse(AuthResponse.fromJson(json));
-    }
-    // â”€â”€ Custom handled errors
-    on AuthException catch (e) {
+    } on AuthException catch (e) {
       debugPrint('[FACEBOOK][AuthException] ${e.message}');
       rethrow;
-    }
-    // â”€â”€ Facebook SDK platform errors
-    on PlatformException catch (e, s) {
+    } on PlatformException catch (e, s) {
       debugPrint('[FACEBOOK][PlatformException]');
       debugPrint('code â†’ ${e.code}');
       debugPrint('message â†’ ${e.message}');
@@ -212,9 +189,7 @@ class AuthService {
       debugPrint('stack â†’ $s');
 
       throw AuthException('Facebook platform error: ${e.message}');
-    }
-    // â”€â”€ Unknown errors
-    catch (e, s) {
+    } catch (e, s) {
       debugPrint('[FACEBOOK][ERROR] $e');
       debugPrint('[FACEBOOK][STACK] $s');
 
@@ -222,12 +197,7 @@ class AuthService {
     }
   }
 
-  // â”€â”€ Session (CACHED) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Returns cached user or fetches fresh data
-  /// Cache is valid for [_userCacheDuration] (default 5min)
   Future<User> get currentUser async {
-    // Return cached user if still fresh
     if (_cachedUser != null && _userFetchTime != null) {
       final age = DateTime.now().difference(_userFetchTime!);
 
@@ -239,11 +209,9 @@ class AuthService {
       debugPrint('[AUTH] Cache stale, refreshing (age: ${age.inMinutes}min)');
     }
 
-    // Fetch fresh user data
     return await _fetchUser();
   }
 
-  /// Force refresh user data (bypasses cache)
   Future<User> refreshUser() async {
     debugPrint('[AUTH] Force refresh user');
     return await _fetchUser();
@@ -259,7 +227,6 @@ class AuthService {
 
       final user = User.fromJson(json);
 
-      // Update cache
       _cachedUser = user;
       _userFetchTime = DateTime.now();
 
@@ -271,16 +238,11 @@ class AuthService {
     }
   }
 
-  /// Returns cached user immediately (may be null or stale)
-  /// Use this for UI that needs instant data without waiting
   User? get currentUserSync => _cachedUser;
-
-  // â”€â”€ Logout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> logout() async {
     debugPrint('[AUTH] Logout');
 
-    // 1) Deactivate this device's push token on backend (best-effort)
     try {
       final meta = await DeviceMetaService.instance.getMeta();
       await FcmNotificationCore().logoutDeactivateDevice(meta.deviceId);
@@ -289,49 +251,37 @@ class AuthService {
       debugPrint('[FCM] Deactivate skipped/failed: $e');
     }
 
-    // 2) Call backend logout (best-effort)
     try {
       await _http.post(AuthEndpoints.logout);
     } catch (e) {
       debugPrint('[AUTH] Logout API failed: $e');
     }
 
-    // 3) Clear tokens + social sessions
     await Future.wait([
       _tokenStorage.clear(),
       _googleSignIn.signOut(),
       FacebookAuth.instance.logOut(),
     ]);
 
-    // 4) Clear caches
     _cachedUser = null;
     _userFetchTime = null;
     _isAuthenticatedCache = false;
 
-    // 5) Notify app
     _statusCtrl.add(AuthStatus.unauthenticated);
   }
 
-  // â”€â”€ Authentication State (CACHED) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Fast auth check using memory cache (no storage I/O)
   Future<bool> get isAuthenticated async {
-    // Return cached value if available
     if (_isAuthenticatedCache != null) {
       return _isAuthenticatedCache!;
     }
 
-    // Otherwise check storage and cache result
     final hasTokens = await _tokenStorage.hasTokens;
     _isAuthenticatedCache = hasTokens;
 
     return hasTokens;
   }
 
-  /// Synchronous auth check (returns cached value, null if unknown)
   bool? get isAuthenticatedSync => _isAuthenticatedCache;
-
-  // â”€â”€ Auth Response Handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<User> _handleAuthResponse(AuthResponse response) async {
     debugPrint('[AUTH] Saving tokens');
@@ -341,7 +291,6 @@ class AuthService {
       refreshToken: response.refreshToken,
     );
 
-    // Update caches immediately
     _cachedUser = response.user;
     _userFetchTime = DateTime.now();
     _isAuthenticatedCache = true;
@@ -353,16 +302,12 @@ class AuthService {
     return response.user;
   }
 
-  // â”€â”€ Cache Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Invalidate user cache (forces next currentUser call to fetch fresh data)
   void invalidateUserCache() {
     debugPrint('[AUTH] Cache invalidated');
     _cachedUser = null;
     _userFetchTime = null;
   }
 
-  /// Check if user cache is stale
   bool get isUserCacheStale {
     if (_userFetchTime == null) return true;
 
@@ -375,5 +320,3 @@ class AuthService {
     _http.dispose();
   }
 }
-
-

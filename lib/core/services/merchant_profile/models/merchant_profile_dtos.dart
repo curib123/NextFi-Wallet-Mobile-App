@@ -1,8 +1,5 @@
 import 'merchant_profile_models.dart';
 
-// ── Request DTOs ───────────────────────────────────────────────────────────────
-
-/// POST /merchant-profiles/request
 class RequestMerchantProfileRequest {
   final MerchantType type;
   final String displayName;
@@ -58,9 +55,6 @@ class RequestMerchantProfileRequest {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// PATCH /merchant-profiles/me
 class UpdateMerchantProfileRequest {
   final String? displayName;
   final String? bio;
@@ -121,9 +115,6 @@ class UpdateMerchantProfileRequest {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// PATCH /merchant-profiles/me/availability
 class UpdateMerchantAvailabilityRequest {
   final SellerAvailability availability;
   final bool? autoUnavailable;

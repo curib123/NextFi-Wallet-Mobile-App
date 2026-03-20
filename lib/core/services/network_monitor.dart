@@ -4,11 +4,6 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
-/// Monitors actual internet reachability instead of only transport state.
-///
-/// - [isOnline] is true only when the device has a network transport and a
-///   lightweight probe confirms real internet access.
-/// - [justReconnected] is briefly true after transitioning offline -> online.
 class NetworkMonitor extends ChangeNotifier {
   NetworkMonitor() {
     _init();

@@ -1,4 +1,3 @@
-// lib/features/claimable/view/widgets/sent_claimable_card.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
@@ -366,5 +365,3 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
     return const SizedBox.shrink();
   }
 }
-
-

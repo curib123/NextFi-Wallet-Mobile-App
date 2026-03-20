@@ -45,7 +45,7 @@ class OfferModel {
   final OfferLimitType? limitType;
   final double? marginPercent;
   final double? successRate;
-  final double? marketPrice; // Price in fiat per unit of crypto (e.g., PHP 1.00 per XLM)
+  final double? marketPrice;
   final double? minAmount;
   final double? maxAmount;
   final double? totalQty;
@@ -149,7 +149,10 @@ class OfferModel {
     List<String> readPaymentMethodIds() {
       final raw = json['paymentMethodIds'];
       if (raw is List) {
-        return raw.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+        return raw
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
       }
 
       final links = json['offerPaymentMethods'];
@@ -180,7 +183,9 @@ class OfferModel {
 
     return OfferModel(
       id: readString(const ['id']),
-      type: _readOfferType(json['type'] ?? json['offerType'] ?? json['offer_type']),
+      type: _readOfferType(
+        json['type'] ?? json['offerType'] ?? json['offer_type'],
+      ),
       status: _readOfferStatus(json['status']),
       asset: readString(const ['asset']),
       fiatCurrency: readString(const ['fiatCurrency', 'fiat_currency']),
@@ -212,7 +217,10 @@ class OfferModel {
         var text = readString(const ['sellerId', 'seller_id']);
         if (text.isEmpty && sellerRaw is Map<String, dynamic>) {
           text =
-              (sellerRaw['id'] ?? sellerRaw['userId'] ?? sellerRaw['user_id'] ?? '')
+              (sellerRaw['id'] ??
+                      sellerRaw['userId'] ??
+                      sellerRaw['user_id'] ??
+                      '')
                   .toString()
                   .trim();
         }

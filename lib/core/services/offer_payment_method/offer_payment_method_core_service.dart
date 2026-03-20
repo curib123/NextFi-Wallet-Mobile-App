@@ -25,13 +25,11 @@ class OfferPaymentMethodCoreService {
     }
   }
 
-  // Get all payment methods for a specific offer
   Future<List<PaymentMethodModel>> getPaymentMethodsForOffer(
     String offerId,
   ) async {
     try {
       final response = await _service.getPaymentMethodsForOffer(offerId);
-      // The response contains OfferPaymentMethodResponse objects with paymentMethod field
       return response.items.map((item) => item.paymentMethod).toList();
     } catch (e) {
       if (kDebugMode) {
@@ -41,7 +39,6 @@ class OfferPaymentMethodCoreService {
     }
   }
 
-  // Get all offers that accept a specific payment method
   Future<List<OfferModel?>> getOffersForPaymentMethod(
     String paymentMethodId,
   ) async {
@@ -58,7 +55,6 @@ class OfferPaymentMethodCoreService {
     }
   }
 
-  // Get all offer-payment method relationships with filtering
   Future<List<OfferPaymentMethodModel>> getAllRelationships({
     String? offerId,
     String? paymentMethodId,
@@ -91,7 +87,6 @@ class OfferPaymentMethodCoreService {
     }
   }
 
-  // Get a specific relationship by ID
   Future<OfferPaymentMethodModel?> getRelationshipById(String id) async {
     try {
       final response = await _service.getById(id);
@@ -110,8 +105,6 @@ class OfferPaymentMethodCoreService {
     }
   }
 
-  /// Get full OfferPaymentMethodResponse records for an offer.
-  /// Use `paymentMethodId` when creating trades.
   Future<List<OfferPaymentMethodResponse>> getOfferPaymentMethodsWithId(
     String offerId,
   ) async {

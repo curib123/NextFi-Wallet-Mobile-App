@@ -1,10 +1,8 @@
-// stellar_dex_service.dart
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_account_service.dart';
 
-/// Service for DEX trading (offers and order book)
 class StellarDexService extends StellarBaseService {
   final StellarAccountService accountService;
 
@@ -17,10 +15,6 @@ class StellarDexService extends StellarBaseService {
     super.quickNodeDefaultHeaders,
   });
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Create Offers
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<String> createSellOffer({
     required KeyPair keyPair,
     required Asset selling,
@@ -31,8 +25,16 @@ class StellarDexService extends StellarBaseService {
     ProgressCallback? onProgress,
   }) async {
     try {
-      await accountService.ensureTrustline(keyPair, selling, onProgress: onProgress);
-      await accountService.ensureTrustline(keyPair, buying, onProgress: onProgress);
+      await accountService.ensureTrustline(
+        keyPair,
+        selling,
+        onProgress: onProgress,
+      );
+      await accountService.ensureTrustline(
+        keyPair,
+        buying,
+        onProgress: onProgress,
+      );
 
       onProgress?.call('Creating sell order...');
       final acc = await loadAccount(keyPair.accountId);
@@ -48,10 +50,9 @@ class StellarDexService extends StellarBaseService {
         builder.setOfferId(offerId.toString());
       }
 
-      final tx = TransactionBuilder(acc)
-          .setMaxOperationFee(100)
-          .addOperation(builder.build())
-          .build();
+      final tx = TransactionBuilder(
+        acc,
+      ).setMaxOperationFee(100).addOperation(builder.build()).build();
       tx.sign(keyPair, network);
 
       final res = await sdk.submitTransaction(tx);
@@ -79,8 +80,16 @@ class StellarDexService extends StellarBaseService {
     ProgressCallback? onProgress,
   }) async {
     try {
-      await accountService.ensureTrustline(keyPair, selling, onProgress: onProgress);
-      await accountService.ensureTrustline(keyPair, buying, onProgress: onProgress);
+      await accountService.ensureTrustline(
+        keyPair,
+        selling,
+        onProgress: onProgress,
+      );
+      await accountService.ensureTrustline(
+        keyPair,
+        buying,
+        onProgress: onProgress,
+      );
 
       onProgress?.call('Creating buy order...');
       final acc = await loadAccount(keyPair.accountId);
@@ -96,10 +105,9 @@ class StellarDexService extends StellarBaseService {
         builder.setOfferId(offerId.toString());
       }
 
-      final tx = TransactionBuilder(acc)
-          .setMaxOperationFee(100)
-          .addOperation(builder.build())
-          .build();
+      final tx = TransactionBuilder(
+        acc,
+      ).setMaxOperationFee(100).addOperation(builder.build()).build();
       tx.sign(keyPair, network);
 
       final res = await sdk.submitTransaction(tx);
@@ -128,17 +136,12 @@ class StellarDexService extends StellarBaseService {
       onProgress?.call('Canceling order...');
       final acc = await loadAccount(keyPair.accountId);
 
-      final builder = ManageSellOfferOperationBuilder(
-        selling,
-        buying,
-        '0',
-        '1',
-      )..setOfferId(offerId.toString());
+      final builder = ManageSellOfferOperationBuilder(selling, buying, '0', '1')
+        ..setOfferId(offerId.toString());
 
-      final tx = TransactionBuilder(acc)
-          .setMaxOperationFee(100)
-          .addOperation(builder.build())
-          .build();
+      final tx = TransactionBuilder(
+        acc,
+      ).setMaxOperationFee(100).addOperation(builder.build()).build();
       tx.sign(keyPair, network);
 
       final res = await sdk.submitTransaction(tx);
@@ -156,16 +159,15 @@ class StellarDexService extends StellarBaseService {
     }
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Query Offers
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<List<OfferResponse>> getAccountOffers({
     required String accountId,
     int limit = 200,
   }) async {
     try {
-      final page = await sdk.offers.forAccount(accountId).limit(limit).execute();
+      final page = await sdk.offers
+          .forAccount(accountId)
+          .limit(limit)
+          .execute();
       return page.records;
     } catch (e) {
       fail(

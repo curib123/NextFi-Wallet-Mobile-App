@@ -1,4 +1,3 @@
-// lib/features/wallet_home/model/wallet_home_state.dart
 import 'package:next_fi/features/wallet_home/data/models/incoming_hint.dart';
 
 enum PriceWindow { h24, d7, d30, y1 }
@@ -9,10 +8,8 @@ class WalletHomeState {
   final String? address;
   final String? walletName;
 
-  // Spendable balances by asset id (XLM reserve already excluded).
   final Map<String, double> balancesByAssetId;
 
-  // Reserve balance tracking
   final double xlmBaseReserve;
   final double xlmTrustlineReserve;
   final double xlmTotalReserve;
@@ -55,7 +52,6 @@ class WalletHomeState {
   double get xlm => balanceFor('stellar');
   double get usdc => balanceFor('usdc_stellar');
 
-  // `xlm` is already spendable (total - reserve - liabilities).
   double get spendableXlm => xlm;
 
   double get totalLockedReserve => xlmTotalReserve;
@@ -99,7 +95,9 @@ class WalletHomeState {
     PriceWindow? selectedWindow,
   }) {
     return WalletHomeState(
-      address: identical(address, _noChange) ? this.address : address as String?,
+      address: identical(address, _noChange)
+          ? this.address
+          : address as String?,
       walletName: identical(walletName, _noChange)
           ? this.walletName
           : walletName as String?,

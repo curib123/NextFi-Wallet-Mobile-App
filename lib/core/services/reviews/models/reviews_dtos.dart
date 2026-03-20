@@ -1,4 +1,3 @@
-/// Request DTO for creating a review
 class CreateReviewRequest {
   final String tradeId;
   final int rating;
@@ -22,19 +21,13 @@ class CreateReviewRequest {
   }
 }
 
-/// Query parameters for listing reviews
 class ReviewsListQuery {
   final String? userId;
   final String? page;
   final String? limit;
   final String? search;
 
-  const ReviewsListQuery({
-    this.userId,
-    this.page,
-    this.limit,
-    this.search,
-  });
+  const ReviewsListQuery({this.userId, this.page, this.limit, this.search});
 
   Map<String, String> toQueryParams() {
     final params = <String, String>{};

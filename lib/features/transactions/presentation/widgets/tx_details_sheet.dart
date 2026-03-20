@@ -68,7 +68,6 @@ Future<void> showTxDetailsBottomSheet({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // drag handle
                 Center(
                   child: Container(
                     width: 42,
@@ -81,7 +80,6 @@ Future<void> showTxDetailsBottomSheet({
                 ),
                 const SizedBox(height: 14),
 
-                // Header
                 Row(
                   children: [
                     Icon(
@@ -128,11 +126,10 @@ Future<void> showTxDetailsBottomSheet({
                 ),
                 const SizedBox(height: 12),
 
-                // Amount + asset
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    AssetLogo(keyOrSymbol: asset), // uses AssetVM via Provider
+                    AssetLogo(keyOrSymbol: asset),
                     const SizedBox(width: 8),
                     Text(
                       '${amount.toStringAsFixed(6)} $asset',
@@ -147,7 +144,6 @@ Future<void> showTxDetailsBottomSheet({
                 ),
                 const SizedBox(height: 8),
 
-                // Contact badge + Save/Edit
                 Row(
                   children: [
                     if (existing != null)
@@ -176,7 +172,6 @@ Future<void> showTxDetailsBottomSheet({
                       ),
                     if (existing != null) const SizedBox(width: 8),
 
-                    // Tertiary action
                     AppTextButton.icon(
                       onPressed: () async {
                         final saved = await showRecipientUpsertSheet(
@@ -215,7 +210,6 @@ Future<void> showTxDetailsBottomSheet({
                 ),
                 const SizedBox(height: 8),
 
-                // Date/time
                 Row(
                   children: [
                     Icon(
@@ -235,7 +229,6 @@ Future<void> showTxDetailsBottomSheet({
                 const Divider(height: 1),
                 const SizedBox(height: 12),
 
-                // Key/Value details
                 KeyValueRow(label: 'From', value: from, copyable: true),
                 const SizedBox(height: 8),
                 KeyValueRow(label: 'To', value: to, copyable: true),
@@ -248,10 +241,8 @@ Future<void> showTxDetailsBottomSheet({
                 ),
                 const SizedBox(height: 16),
 
-                // Actions (CustomButton)
                 Row(
                   children: [
-                    // Copy Hash (outlined / disabled)
                     Expanded(
                       child: CustomButton(
                         text: 'Copy Hash',
@@ -273,7 +264,6 @@ Future<void> showTxDetailsBottomSheet({
                     ),
                     const SizedBox(width: 10),
 
-                    // Explorer (filled / disabled) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â uses LinkOpener
                     Expanded(
                       child: CustomButton(
                         text: 'Explorer',
@@ -295,7 +285,6 @@ Future<void> showTxDetailsBottomSheet({
                 ),
                 const SizedBox(height: 8),
 
-                // Done (outlined, full width)
                 CustomButton(
                   text: 'Done',
                   icon: LucideIcons.check,
@@ -310,4 +299,3 @@ Future<void> showTxDetailsBottomSheet({
     },
   );
 }
-

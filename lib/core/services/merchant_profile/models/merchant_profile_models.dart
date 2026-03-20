@@ -1,5 +1,3 @@
-// ── Enums ─────────────────────────────────────────────────────────────────────
-
 enum MerchantType { individual, business, unknown }
 
 MerchantType merchantTypeFromApi(dynamic raw) {
@@ -25,8 +23,6 @@ String merchantTypeToApi(MerchantType type) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 enum MerchantStatus { pending, approved, rejected, suspended, unknown }
 
 MerchantStatus merchantStatusFromApi(dynamic raw) {
@@ -44,8 +40,6 @@ MerchantStatus merchantStatusFromApi(dynamic raw) {
       return MerchantStatus.unknown;
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 enum MerchantTier { bronze, silver, gold, platinum, diamond }
 
@@ -66,8 +60,6 @@ MerchantTier merchantTierFromApi(dynamic raw) {
       return MerchantTier.bronze;
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 enum SellerAvailability { available, unavailable, onBreak, unknown }
 
@@ -98,8 +90,6 @@ String sellerAvailabilityToApi(SellerAvailability availability) {
   }
 }
 
-// ── Model ─────────────────────────────────────────────────────────────────────
-
 class MerchantProfileModel {
   final String id;
   final String userId;
@@ -115,7 +105,6 @@ class MerchantProfileModel {
   final double? avgRating;
   final int completedTrades;
 
-  // Business info
   final String? businessName;
   final String? registrationNumber;
   final String? businessAddress;
@@ -124,17 +113,14 @@ class MerchantProfileModel {
   final String? businessDocumentUrl;
   final String? authorizationLetterUrl;
 
-  // Default crypto receiving info
   final String? defaultCryptoAddress;
   final String? defaultCryptoMemo;
 
-  // Availability
   final SellerAvailability availability;
   final bool autoUnavailable;
   final DateTime? availableFrom;
   final DateTime? availableTo;
 
-  // Admin review fields
   final String? requestNote;
   final String? decisionNote;
   final String? rejectionReason;
@@ -261,10 +247,10 @@ class MerchantProfileModel {
       email: readString(const ['email']),
       phone: readString(const ['phone']),
       avgRating: readDouble(const ['avgRating', 'avg_rating']),
-      completedTrades: readInt(
-        const ['completedTrades', 'completed_trades'],
-        fallback: 0,
-      ),
+      completedTrades: readInt(const [
+        'completedTrades',
+        'completed_trades',
+      ], fallback: 0),
       businessName: readString(const ['businessName', 'business_name']),
       registrationNumber: readString(const [
         'registrationNumber',

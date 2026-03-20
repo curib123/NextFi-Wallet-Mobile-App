@@ -35,10 +35,6 @@ import 'package:next_fi/core/services/profile/profile_core_service.dart';
 import 'package:next_fi/core/services/verification/models/verification_models.dart';
 import 'package:next_fi/core/services/verification/verification_core_service.dart';
 
-// -----------------------------------------------------------------------------
-// TYPOGRAPHY TOKENS
-// -----------------------------------------------------------------------------
-
 abstract class _T {
   static const displayName = TextStyle(
     fontSize: 20,
@@ -102,10 +98,6 @@ abstract class _T {
   );
 }
 
-// -----------------------------------------------------------------------------
-// TTL CACHE  (unchanged logic)
-// -----------------------------------------------------------------------------
-
 class _CacheEntry<T> {
   _CacheEntry(this.value) : _at = DateTime.now();
   final T value;
@@ -157,10 +149,6 @@ class _DrawerCache {
 
   static void invalidateProfile() => profile = null;
 }
-
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
 
 class AppDrawer extends StatefulWidget {
   final VoidCallback? onLogout;
@@ -458,7 +446,6 @@ class _AppDrawerState extends State<AppDrawer>
           position: _slideAnim,
           child: Column(
             children: [
-              // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Header ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
               if (showShimmer)
                 _ProfileShimmer(topPadding: mq.padding.top, c: c)
               else if (user != null)
@@ -476,7 +463,6 @@ class _AppDrawerState extends State<AppDrawer>
                   onTap: _redirectToLogin,
                 ),
 
-              // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Nav ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
               Expanded(
                 child: ListView(
                   padding: EdgeInsets.zero,
@@ -669,7 +655,6 @@ class _AppDrawerState extends State<AppDrawer>
                 ),
               ),
 
-              // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Logout ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
               if (user != null) ...[
                 Container(height: 1, color: c.border.withValues(alpha: 0.5)),
                 _LogoutTile(isLoading: _loggingOut, c: c, onTap: _handleLogout),
@@ -682,10 +667,6 @@ class _AppDrawerState extends State<AppDrawer>
     );
   }
 }
-
-// -----------------------------------------------------------------------------
-// PROFILE HEADER
-// -----------------------------------------------------------------------------
 
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
@@ -726,7 +707,6 @@ class _ProfileHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Thin primary accent line at very top
           Container(
             height: 2,
             decoration: BoxDecoration(
@@ -740,16 +720,13 @@ class _ProfileHeader extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Avatar with tier ring
                 _DrawerAvatar(user: user, c: c, tierProgress: tierProgress),
                 const SizedBox(width: 13),
-                // Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Name
                       Text(
                         _name,
                         style: _T.displayName.copyWith(color: c.textPrimary),
@@ -757,7 +734,6 @@ class _ProfileHeader extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-                      // Handle / email sub-line
                       if (_handle != null)
                         Text(
                           _handle!,
@@ -783,7 +759,6 @@ class _ProfileHeader extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                      // Meta chips row
                       const SizedBox(height: 7),
                       Row(
                         children: [
@@ -806,10 +781,6 @@ class _ProfileHeader extends StatelessWidget {
     );
   }
 }
-
-// -----------------------------------------------------------------------------
-// TIER META
-// -----------------------------------------------------------------------------
 
 class _TierMeta {
   static Color color(MerchantTier t) => switch (t) {
@@ -837,10 +808,6 @@ class _TierMeta {
   };
 }
 
-// -----------------------------------------------------------------------------
-// DRAWER AVATAR  (avatar + animated tier ring + badge below)
-// -----------------------------------------------------------------------------
-
 class _RingPainter extends CustomPainter {
   const _RingPainter({
     required this.progress,
@@ -858,8 +825,8 @@ class _RingPainter extends CustomPainter {
     final cx = size.width / 2;
     final cy = size.height / 2;
     final r = cx - _stroke / 2 - 1;
-    const startAngle = -1.5707963; // -ÃƒÂÃ¢â€šÂ¬/2 (top)
-    const fullSweep = 6.2831853; // 2ÃƒÂÃ¢â€šÂ¬
+    const startAngle = -1.5707963;
+    const fullSweep = 6.2831853;
 
     canvas.drawArc(
       Rect.fromCircle(center: Offset(cx, cy), radius: r),
@@ -916,7 +883,6 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
       duration: const Duration(milliseconds: 900),
     );
     _ringAnim = CurvedAnimation(parent: _ringCtrl, curve: Curves.easeOutCubic);
-    // Slight delay so it animates in after the drawer slides open
     Future.delayed(const Duration(milliseconds: 250), () {
       if (mounted) _ringCtrl.forward();
     });
@@ -953,7 +919,6 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              // Animated tier progress ring
               if (hasTier)
                 AnimatedBuilder(
                   animation: _ringAnim,
@@ -966,7 +931,6 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
                     ),
                   ),
                 ),
-              // Avatar
               Container(
                 width: avatarSize,
                 height: avatarSize,
@@ -987,7 +951,6 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
                   ),
                 ),
               ),
-              // Online dot
               Positioned(
                 bottom: 3,
                 right: 3,
@@ -1004,7 +967,6 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
             ],
           ),
         ),
-        // Tier badge pill below avatar
         if (hasTier && tierLabel != null && tierIcon != null) ...[
           const SizedBox(height: 5),
           Container(
@@ -1035,10 +997,6 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
     );
   }
 }
-
-// -----------------------------------------------------------------------------
-// VERIFIED BADGE
-// -----------------------------------------------------------------------------
 
 class _VerifiedBadge extends StatelessWidget {
   const _VerifiedBadge({required this.status, required this.c});
@@ -1094,10 +1052,6 @@ class _VerifiedBadge extends StatelessWidget {
   }
 }
 
-// -----------------------------------------------------------------------------
-// STATUS PILL  (nav tile trailing)
-// -----------------------------------------------------------------------------
-
 class _StatusPill extends StatelessWidget {
   const _StatusPill({required this.status, required this.c});
   final TrustStatus status;
@@ -1150,10 +1104,6 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-// -----------------------------------------------------------------------------
-// COUNTRY CHIP
-// -----------------------------------------------------------------------------
-
 class _CountryChip extends StatelessWidget {
   const _CountryChip({required this.country, required this.c});
   final String country;
@@ -1177,10 +1127,6 @@ class _CountryChip extends StatelessWidget {
     ),
   );
 }
-
-// -----------------------------------------------------------------------------
-// LOGIN PROMPT
-// -----------------------------------------------------------------------------
 
 class _LoginPrompt extends StatelessWidget {
   const _LoginPrompt({
@@ -1284,10 +1230,6 @@ class _LoginPrompt extends StatelessWidget {
   );
 }
 
-// -----------------------------------------------------------------------------
-// SECTION LABEL
-// -----------------------------------------------------------------------------
-
 class _Section extends StatelessWidget {
   const _Section({required this.label, required this.c});
   final String label;
@@ -1304,10 +1246,6 @@ class _Section extends StatelessWidget {
     ),
   );
 }
-
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
 
 class _Tile extends StatefulWidget {
   const _Tile({
@@ -1391,7 +1329,6 @@ class _TileState extends State<_Tile> with SingleTickerProviderStateMixin {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Accent icon container ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 40ÃƒÆ’Ã¢â‚¬â€40
               Container(
                 width: 40,
                 height: 40,
@@ -1402,7 +1339,6 @@ class _TileState extends State<_Tile> with SingleTickerProviderStateMixin {
                 child: Icon(widget.icon, color: accent, size: 18),
               ),
               const SizedBox(width: 12),
-              // Label + sub
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1420,7 +1356,6 @@ class _TileState extends State<_Tile> with SingleTickerProviderStateMixin {
                 ),
               ),
               const SizedBox(width: 8),
-              // Trailing
               if (widget.trailing != null)
                 widget.trailing!
               else if (widget.locked)
@@ -1438,10 +1373,6 @@ class _TileState extends State<_Tile> with SingleTickerProviderStateMixin {
     );
   }
 }
-
-// -----------------------------------------------------------------------------
-// LOCK PILL
-// -----------------------------------------------------------------------------
 
 class _LockPill extends StatelessWidget {
   const _LockPill({required this.c});
@@ -1505,10 +1436,6 @@ class _CountBadge extends StatelessWidget {
   }
 }
 
-// -----------------------------------------------------------------------------
-// VERSION ROW
-// -----------------------------------------------------------------------------
-
 class _VersionRow extends StatelessWidget {
   const _VersionRow({required this.info, required this.c});
   final PackageInfo info;
@@ -1536,10 +1463,6 @@ class _VersionRow extends StatelessWidget {
     ),
   );
 }
-
-// -----------------------------------------------------------------------------
-// LOGOUT TILE
-// -----------------------------------------------------------------------------
 
 class _LogoutTile extends StatefulWidget {
   const _LogoutTile({
@@ -1627,10 +1550,6 @@ class _LogoutTileState extends State<_LogoutTile> {
     );
   }
 }
-
-// -----------------------------------------------------------------------------
-// PROFILE SHIMMER
-// -----------------------------------------------------------------------------
 
 class _ProfileShimmer extends StatefulWidget {
   const _ProfileShimmer({required this.topPadding, required this.c});
@@ -1738,7 +1657,6 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
                     ),
                   ],
                 ),
-                // Shimmer sweep
                 Positioned.fill(
                   child: IgnorePointer(
                     child: Transform.translate(
@@ -1772,10 +1690,6 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
   }
 }
 
-// -----------------------------------------------------------------------------
-// LOGOUT MODAL
-// -----------------------------------------------------------------------------
-
 class _LogoutModal extends StatelessWidget {
   const _LogoutModal();
 
@@ -1801,7 +1715,6 @@ class _LogoutModal extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle bar
               Container(
                 width: 36,
                 height: 4,
@@ -1811,7 +1724,6 @@ class _LogoutModal extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              // Icon
               Container(
                 width: 60,
                 height: 60,
@@ -1846,7 +1758,6 @@ class _LogoutModal extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 22),
-              // Confirm button
               GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
@@ -1872,7 +1783,6 @@ class _LogoutModal extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              // Cancel button
               GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();

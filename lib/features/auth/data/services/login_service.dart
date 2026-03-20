@@ -6,21 +6,16 @@ import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/core/services/wallet/wallet_manager.dart';
 
 class LoginLegalLinks {
-  const LoginLegalLinks({
-    required this.termsUrl,
-    required this.privacyUrl,
-  });
+  const LoginLegalLinks({required this.termsUrl, required this.privacyUrl});
 
   final String termsUrl;
   final String privacyUrl;
 }
 
 class LoginService {
-  LoginService({
-    AuthService? authService,
-    http.Client? httpClient,
-  }) : _authService = authService ?? AuthService(),
-       _httpClient = httpClient ?? http.Client();
+  LoginService({AuthService? authService, http.Client? httpClient})
+    : _authService = authService ?? AuthService(),
+      _httpClient = httpClient ?? http.Client();
 
   final AuthService _authService;
   final http.Client _httpClient;
@@ -32,9 +27,7 @@ class LoginService {
   Future<void> syncWalletsAfterLogin() async {
     try {
       await WalletManager.I.syncToBackend();
-    } catch (_) {
-      // Best effort only. Login should still succeed.
-    }
+    } catch (_) {}
   }
 
   Future<LoginLegalLinks> fetchLegalLinks(String backendBaseUrl) async {
@@ -57,18 +50,12 @@ class LoginService {
           );
         }
       }
-    } catch (_) {
-      // Fall through to fallback links.
-    }
+    } catch (_) {}
 
-    return LoginLegalLinks(
-      termsUrl: fallback,
-      privacyUrl: fallback,
-    );
+    return LoginLegalLinks(termsUrl: fallback, privacyUrl: fallback);
   }
 
   void dispose() {
     _httpClient.close();
   }
 }
-

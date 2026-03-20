@@ -1,4 +1,3 @@
-// lib/Screen/WalletHomeScreenWidgets/asset_widget.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -143,10 +142,7 @@ class AssetWidget extends ConsumerWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ReceiveScreen(
-          address: address,
-          initialAssetId: a.id,
-        ),
+        builder: (_) => ReceiveScreen(address: address, initialAssetId: a.id),
       ),
     );
   }
@@ -161,18 +157,17 @@ class AssetWidget extends ConsumerWidget {
     final window = homeState.selectedWindow;
     final sortedAssets = assets.toList()
       ..sort((a, b) {
-        final balanceCompare = _liveBalance(homeState, b).compareTo(
-          _liveBalance(homeState, a),
-        );
+        final balanceCompare = _liveBalance(
+          homeState,
+          b,
+        ).compareTo(_liveBalance(homeState, a));
         if (balanceCompare != 0) return balanceCompare;
 
         final fiatCompare = _fiatFor(
           cur,
           b,
           _liveBalance(homeState, b),
-        ).compareTo(
-          _fiatFor(cur, a, _liveBalance(homeState, a)),
-        );
+        ).compareTo(_fiatFor(cur, a, _liveBalance(homeState, a)));
         if (fiatCompare != 0) return fiatCompare;
 
         return a.sortOrder.compareTo(b.sortOrder);
@@ -393,7 +388,6 @@ class AssetWidget extends ConsumerWidget {
   }
 }
 
-// Price Window Selector Widget - with visible horizontal wave shimmer
 class _PriceWindowSelector extends StatefulWidget {
   final AppColor colors;
   final PriceWindow selectedWindow;
@@ -476,7 +470,6 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
           ),
           child: Stack(
             children: [
-              // Horizontal wave shimmer effect - always visible
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
@@ -544,7 +537,6 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
   }
 }
 
-// Reserve Balance Card Widget with horizontal wave shimmer
 class _ReserveBalanceCard extends ConsumerStatefulWidget {
   final AppColor colors;
   final NumberFormat money;
@@ -621,7 +613,6 @@ class _ReserveBalanceCardState extends ConsumerState<_ReserveBalanceCard>
           ),
           child: Stack(
             children: [
-              // Horizontal wave shimmer effect - always visible
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
@@ -652,7 +643,6 @@ class _ReserveBalanceCardState extends ConsumerState<_ReserveBalanceCard>
                   ),
                 ),
               ),
-              // Content
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,

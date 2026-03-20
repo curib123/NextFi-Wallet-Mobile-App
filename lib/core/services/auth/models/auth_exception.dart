@@ -14,5 +14,5 @@ class TokenExpiredException extends AuthException {
 
 class RefreshFailedException extends AuthException {
   const RefreshFailedException()
-      : super('Session expired. Please log in again.', statusCode: 401);
+    : super('Session expired. Please log in again.', statusCode: 401);
 }

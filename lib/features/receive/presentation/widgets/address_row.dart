@@ -1,4 +1,3 @@
-// lib/features/receive/view/widgets/address_row.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -43,7 +42,11 @@ class AddressRow extends StatelessWidget {
                   await Clipboard.setData(ClipboardData(text: address));
                   if (!context.mounted) return;
                   HapticFeedback.lightImpact();
-                  showFloatingSnackBar(context, message: 'Address copied', type: SnackBarType.success);
+                  showFloatingSnackBar(
+                    context,
+                    message: 'Address copied',
+                    type: SnackBarType.success,
+                  );
                 },
               ),
             ],
@@ -63,4 +66,3 @@ class AddressRow extends StatelessWidget {
     );
   }
 }
-

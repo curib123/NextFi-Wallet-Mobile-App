@@ -1,12 +1,8 @@
-// lib/common/components/avatar/user_avatar.dart
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
-/// Centralized user avatar component
-/// Displays user profile image or initial letter
 class UserAvatar extends StatelessWidget {
   final User user;
   final double radius;
@@ -41,12 +37,12 @@ class UserAvatar extends StatelessWidget {
     return Container(
       decoration: showBorder
           ? BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: borderColor ?? appColors.onPrimary,
-          width: borderWidth,
-        ),
-      )
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: borderColor ?? appColors.onPrimary,
+                width: borderWidth,
+              ),
+            )
           : null,
       child: CircleAvatar(
         radius: radius,
@@ -56,41 +52,30 @@ class UserAvatar extends StatelessWidget {
         child: hasAvatar
             ? null
             : Text(
-          initial,
-          style: TextStyle(
-            color: appColors.onPrimary,
-            fontWeight: fontWeight ?? FontWeight.bold,
-            fontSize: fontSize ?? (radius * 0.7),
-          ),
-        ),
+                initial,
+                style: TextStyle(
+                  color: appColors.onPrimary,
+                  fontWeight: fontWeight ?? FontWeight.bold,
+                  fontSize: fontSize ?? (radius * 0.7),
+                ),
+              ),
       ),
     );
   }
 }
 
-/// Small avatar variant (for lists, chips, etc.)
 class UserAvatarSmall extends StatelessWidget {
   final User user;
   final AppColor? colors;
 
-  const UserAvatarSmall({
-    super.key,
-    required this.user,
-    this.colors,
-  });
+  const UserAvatarSmall({super.key, required this.user, this.colors});
 
   @override
   Widget build(BuildContext context) {
-    return UserAvatar(
-      user: user,
-      radius: 16,
-      colors: colors,
-      fontSize: 12,
-    );
+    return UserAvatar(user: user, radius: 16, colors: colors, fontSize: 12);
   }
 }
 
-/// Medium avatar variant (for top bars, navigation)
 class UserAvatarMedium extends StatelessWidget {
   final User user;
   final AppColor? colors;
@@ -115,7 +100,6 @@ class UserAvatarMedium extends StatelessWidget {
   }
 }
 
-/// Large avatar variant (for profile pages, modals)
 class UserAvatarLarge extends StatelessWidget {
   final User user;
   final AppColor? colors;
@@ -144,9 +128,6 @@ class UserAvatarLarge extends StatelessWidget {
   }
 }
 
-/// Chat-specific avatar: accepts a raw name + optional avatarUrl.
-/// Shows a CachedNetworkImage when the URL is available, otherwise
-/// falls back to a coloured circle with initials.
 class ChatUserAvatar extends StatelessWidget {
   const ChatUserAvatar({
     super.key,
@@ -181,24 +162,24 @@ class ChatUserAvatar extends StatelessWidget {
   }
 
   Widget _initials_(Color color) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          shape: BoxShape.circle,
-          border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.15),
+      shape: BoxShape.circle,
+      border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
+    ),
+    child: Center(
+      child: Text(
+        _initials,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: size * 0.36,
         ),
-        child: Center(
-          child: Text(
-            _initials,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: size * 0.36,
-            ),
-          ),
-        ),
-      );
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +201,3 @@ class ChatUserAvatar extends StatelessWidget {
     return _initials_(color);
   }
 }
-
-
-

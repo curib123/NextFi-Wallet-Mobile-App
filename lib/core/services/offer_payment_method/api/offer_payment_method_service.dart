@@ -1,4 +1,3 @@
-
 import 'package:http/http.dart' as http;
 
 import '../helpers/offer_payment_method_exceptions.dart';
@@ -10,10 +9,8 @@ import 'offer_payment_method_endpoints.dart';
 typedef TokenProvider = Future<String?> Function();
 
 class OfferPaymentMethodService {
-  OfferPaymentMethodService({
-    required this.tokenProvider,
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  OfferPaymentMethodService({required this.tokenProvider, http.Client? client})
+    : _client = client ?? http.Client();
 
   final TokenProvider tokenProvider;
   final http.Client _client;
@@ -137,14 +134,18 @@ class OfferPaymentMethodService {
     return const [];
   }
 
-  OfferPaymentMethodMeta _extractMeta(dynamic data, {required int fallbackCount}) {
+  OfferPaymentMethodMeta _extractMeta(
+    dynamic data, {
+    required int fallbackCount,
+  }) {
     final map = _asStringKeyMap(data);
     if (map != null) {
       final meta = _asStringKeyMap(map['meta']);
       if (meta != null) return OfferPaymentMethodMeta.fromJson(meta);
 
       final pagination = _asStringKeyMap(map['pagination']);
-      if (pagination != null) return OfferPaymentMethodMeta.fromJson(pagination);
+      if (pagination != null)
+        return OfferPaymentMethodMeta.fromJson(pagination);
 
       if (map.containsKey('page') ||
           map.containsKey('limit') ||
@@ -173,7 +174,8 @@ class OfferPaymentMethodService {
   }) async {
     final queryParams = <String, String>{};
     if (offerId != null) queryParams['offerId'] = offerId;
-    if (paymentMethodId != null) queryParams['paymentMethodId'] = paymentMethodId;
+    if (paymentMethodId != null)
+      queryParams['paymentMethodId'] = paymentMethodId;
     if (activeOnly != null) queryParams['activeOnly'] = activeOnly.toString();
     if (searchQuery != null) queryParams['q'] = searchQuery;
     queryParams['page'] = page.toString();
@@ -203,7 +205,10 @@ class OfferPaymentMethodService {
     );
     OfferPaymentMethodHttp.ensureOk(res);
     final data = OfferPaymentMethodHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'item', 'offerPaymentMethod']);
+    final map = _extractMap(
+      data,
+      keys: const ['data', 'item', 'offerPaymentMethod'],
+    );
     if (map != null) return OfferPaymentMethodResponse.fromJson(map);
     throw ApiException(
       res.statusCode,
@@ -212,9 +217,13 @@ class OfferPaymentMethodService {
     );
   }
 
-  Future<OfferPaymentMethodPagedResponse> getPaymentMethodsForOffer(String offerId) async {
+  Future<OfferPaymentMethodPagedResponse> getPaymentMethodsForOffer(
+    String offerId,
+  ) async {
     final res = await _client.get(
-      OfferPaymentMethodHttp.uri(OfferPaymentMethodEndpoints.getByOffer(offerId)),
+      OfferPaymentMethodHttp.uri(
+        OfferPaymentMethodEndpoints.getByOffer(offerId),
+      ),
       headers: await _publicHeaders(),
     );
     OfferPaymentMethodHttp.ensureOk(res);
@@ -227,9 +236,13 @@ class OfferPaymentMethodService {
     return OfferPaymentMethodPagedResponse(items: items, meta: meta);
   }
 
-  Future<OfferPaymentMethodPagedResponse> getOffersForPaymentMethod(String paymentMethodId) async {
+  Future<OfferPaymentMethodPagedResponse> getOffersForPaymentMethod(
+    String paymentMethodId,
+  ) async {
     final res = await _client.get(
-      OfferPaymentMethodHttp.uri(OfferPaymentMethodEndpoints.getByPaymentMethod(paymentMethodId)),
+      OfferPaymentMethodHttp.uri(
+        OfferPaymentMethodEndpoints.getByPaymentMethod(paymentMethodId),
+      ),
       headers: await _publicHeaders(),
     );
     OfferPaymentMethodHttp.ensureOk(res);

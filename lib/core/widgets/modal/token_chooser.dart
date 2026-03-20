@@ -66,7 +66,8 @@ class _TokenSelectorSheet extends ConsumerStatefulWidget {
   final void Function(AssetModel) onSelect;
 
   @override
-  ConsumerState<_TokenSelectorSheet> createState() => _TokenSelectorSheetState();
+  ConsumerState<_TokenSelectorSheet> createState() =>
+      _TokenSelectorSheetState();
 }
 
 class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
@@ -104,9 +105,7 @@ class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
           const SizedBox(height: 12),
           Expanded(
             child: assets.isEmpty
-                ? _EmptyState(
-                    onViewMore: () => _openManageAssets(context),
-                  )
+                ? _EmptyState(onViewMore: () => _openManageAssets(context))
                 : ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.zero,
@@ -146,9 +145,9 @@ class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
   }
 
   Future<void> _openManageAssets(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ManageWalletAssetsScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ManageWalletAssetsScreen()));
     if (!mounted) return;
     final updatedAssets = ref.read(assetVmProvider).walletHomeAssets;
     setState(() {
@@ -182,11 +181,7 @@ class _Header extends StatelessWidget {
             gradient: c.primaryGradient,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            LucideIcons.coins,
-            color: c.onPrimary,
-            size: 19,
-          ),
+          child: Icon(LucideIcons.coins, color: c.onPrimary, size: 19),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -299,9 +294,7 @@ class _SelectableTokenTile extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Icon(
-                selected
-                    ? LucideIcons.checkCircle2
-                    : LucideIcons.circle,
+                selected ? LucideIcons.checkCircle2 : LucideIcons.circle,
                 color: selected ? c.primary : c.textMuted,
                 size: 20,
               ),
@@ -357,11 +350,7 @@ class _ViewMoreTile extends StatelessWidget {
                 color: c.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                LucideIcons.listPlus,
-                color: c.primary,
-                size: 18,
-              ),
+              child: Icon(LucideIcons.listPlus, color: c.primary, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -388,11 +377,7 @@ class _ViewMoreTile extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              LucideIcons.chevronRight,
-              color: c.textSecondary,
-              size: 18,
-            ),
+            Icon(LucideIcons.chevronRight, color: c.textSecondary, size: 18),
           ],
         ),
       ),
@@ -401,10 +386,7 @@ class _ViewMoreTile extends StatelessWidget {
 }
 
 class _SelectedHint extends StatelessWidget {
-  const _SelectedHint({
-    required this.asset,
-    required this.balance,
-  });
+  const _SelectedHint({required this.asset, required this.balance});
 
   final AssetModel asset;
   final double balance;
@@ -420,11 +402,7 @@ class _SelectedHint extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            LucideIcons.badgeCheck,
-            color: c.primary,
-            size: 16,
-          ),
+          Icon(LucideIcons.badgeCheck, color: c.primary, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -461,11 +439,7 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            LucideIcons.coins,
-            color: c.textMuted,
-            size: 28,
-          ),
+          Icon(LucideIcons.coins, color: c.textMuted, size: 28),
           const SizedBox(height: 10),
           Text(
             'No wallet-home assets selected yet.',

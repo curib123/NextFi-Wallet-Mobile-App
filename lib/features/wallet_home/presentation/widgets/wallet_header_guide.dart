@@ -1,4 +1,3 @@
-// lib/features/wallet_home/presentation/widgets/wallet_header_guide.dart
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -13,22 +12,19 @@ class WalletHeaderGuide extends StatefulWidget {
     super.key,
     required this.colors,
 
-    // Dynamic context (all optional)
     this.xlmBalance,
     this.usdcBalance,
     this.isTestnet,
     this.hasUsdcTrustline,
 
-    // UX
     this.randomizeEvery = const Duration(minutes: 1),
     this.padding,
     this.borderRadius = 12,
-    this.dense = true, // slimmer by default
-    this.allowTwoLines = true, // kept for backwards-compat
-    this.maxLines = 3, // NEW: allow longer beginner text
-    // Advanced
+    this.dense = true,
+    this.allowTwoLines = true,
+    this.maxLines = 3,
     this.lowXlmThreshold = 0.2,
-    this.includeTags = const <String>{}, // empty = include all
+    this.includeTags = const <String>{},
     this.excludeTags = const <String>{},
     this.extraTips = const <GuideTip>[],
     this.rngSeed,
@@ -58,15 +54,11 @@ class WalletHeaderGuide extends StatefulWidget {
   State<WalletHeaderGuide> createState() => _WalletHeaderGuideState();
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// reusable_model & catalog
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class GuideTip {
   final String id;
   final IconData icon;
-  final String text; // supports \n line breaks
-  final Set<String> tags; // e.g., {'xlm','fees','warning'}
+  final String text;
+  final Set<String> tags;
 
   const GuideTip({
     required this.id,
@@ -101,10 +93,7 @@ class TipBlueprint {
   const TipBlueprint(this.tip, {this.when});
 }
 
-// Curated catalog â€” friendly, beginner-oriented; longer text with newlines.
-// Keep each to ~2â€“3 short clauses so it fits in 2â€“3 lines on mobile.
 final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
-  // â”€â”€ XLM: what & when (beginner friendly) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'xlm_transactions_long',
@@ -142,7 +131,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
     ),
   ),
 
-  // â”€â”€ USDC: what & when (beginner friendly) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'usdc_simple',
@@ -181,7 +169,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
     ),
   ),
 
-  // â”€â”€ XLM vs USDC: quick heuristics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'choose_asset_simple',
@@ -201,7 +188,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
     ),
   ),
 
-  // â”€â”€ Swaps & payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'swap_keep_xlm',
@@ -257,7 +243,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
     ),
   ),
 
-  // â”€â”€ Safety & security â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'sec_secret',
@@ -313,7 +298,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
     ),
   ),
 
-  // â”€â”€ Practical nudges (conditional) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'low_xlm',
@@ -347,7 +331,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
         (ctx.usdcBalance ?? 0) > 0,
   ),
 
-  // â”€â”€ Network / environment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'testnet_note',
@@ -359,7 +342,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
     when: (ctx) => ctx.isTestnet == true,
   ),
 
-  // â”€â”€ On/Off-ramp & cash-out awareness (generic) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'onramp_compare',
@@ -379,7 +361,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
     ),
   ),
 
-  // â”€â”€ General money hygiene â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   TipBlueprint(
     GuideTip(
       id: 'fees_are_tiny',
@@ -400,10 +381,6 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
   ),
 ];
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Widget
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
   late final math.Random _rng = widget.rngSeed == null
       ? math.Random()
@@ -415,7 +392,7 @@ class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
   int _index = 0;
 
   Timer? _timer;
-  bool _paused = false; // pause on long-press
+  bool _paused = false;
 
   @override
   void initState() {
@@ -492,7 +469,6 @@ class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
         ? _announcementTips.where(_passesTagFilters).toList()
         : _catalogTipsFor(ctx);
 
-    // Add extras and dedupe by id
     final seen = <String>{};
     final dedup = <GuideTip>[];
     for (final t in [...built, ...widget.extraTips]) {
@@ -626,7 +602,6 @@ class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
     return tags;
   }
 
-  // Accent color heuristic by tags
   Color _accentFor(GuideTip tip) {
     final tags = tip.tags;
     final colors = widget.colors;
@@ -664,8 +639,8 @@ class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
     final gap = dense ? 8.0 : 10.0;
 
     return GestureDetector(
-      onTap: _pickRandomNow, // quick rotate on tap
-      onLongPress: () => setState(() => _paused = !_paused), // pause/resume
+      onTap: _pickRandomNow,
+      onLongPress: () => setState(() => _paused = !_paused),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         decoration: BoxDecoration(
@@ -676,7 +651,6 @@ class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icon bubble
             Container(
               width: iconBubble,
               height: iconBubble,
@@ -691,7 +665,6 @@ class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
                 color: base.withValues(alpha: 0.95),
               ),
             ),
-            // Text (wraps up to maxLines)
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
@@ -724,7 +697,6 @@ class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
   }
 }
 
-// Text thatâ€™s slim; wraps up to [maxLines] with gentle line height.
 class _TipText extends StatelessWidget {
   const _TipText({
     super.key,
@@ -760,4 +732,3 @@ class _TipText extends StatelessWidget {
     );
   }
 }
-

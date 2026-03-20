@@ -1,8 +1,12 @@
-// lib/features/price_chart/view/widgets/segment_button.dart
 import 'package:flutter/material.dart';
 
 class SegmentButton extends StatelessWidget {
-  const SegmentButton({super.key, required this.label, required this.selected, required this.onTap});
+  const SegmentButton({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -33,4 +37,3 @@ class SegmentButton extends StatelessWidget {
     );
   }
 }
-

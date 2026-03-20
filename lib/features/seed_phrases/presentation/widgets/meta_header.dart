@@ -1,9 +1,7 @@
-// lib/features/seed_phrase/view/widgets/meta_header.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
-/// Clean action bar for phrase controls
 class MetaHeader extends StatelessWidget {
   const MetaHeader({
     super.key,
@@ -23,7 +21,6 @@ class MetaHeader extends StatelessWidget {
 
     return Row(
       children: [
-        // Word count badge
         Text(
           '$wordCount words',
           style: TextStyle(
@@ -33,13 +30,14 @@ class MetaHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        // Copy button
         GestureDetector(
           onTap: canCopy ? onCopy : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: canCopy ? colors.surface : colors.surface.withValues(alpha: 0.5),
+              color: canCopy
+                  ? colors.surface
+                  : colors.surface.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: colors.border.withValues(alpha: 0.15),
@@ -68,7 +66,6 @@ class MetaHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        // Hide button (when visible)
         if (!obscured)
           GestureDetector(
             onTap: onCopy,
@@ -85,11 +82,7 @@ class MetaHeader extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    LucideIcons.eyeOff,
-                    size: 16,
-                    color: colors.textPrimary,
-                  ),
+                  Icon(LucideIcons.eyeOff, size: 16, color: colors.textPrimary),
                   const SizedBox(width: 6),
                   Text(
                     'Hide',

@@ -1,9 +1,7 @@
-// stellar_base_service.dart
 import 'dart:async';
 
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-/// User-friendly error with actionable advice
 class StellarWalletError implements Exception {
   final String message;
   final String? technicalDetails;
@@ -33,14 +31,11 @@ class StellarWalletError implements Exception {
   }
 }
 
-/// Callback for progress updates during operations
 typedef ProgressCallback = void Function(String message);
 
-/// Base class for all Stellar services
 abstract class StellarBaseService {
   final StellarSDK sdk;
 
-  /// Private QuickNode SDK (fallback)
   final StellarSDK? _sdkQuickNode;
 
   final String? quickNodeUrlMainnet;
@@ -55,7 +50,6 @@ abstract class StellarBaseService {
     this.quickNodeDefaultHeaders,
   }) : _sdkQuickNode = sdkQuickNode;
 
-  /// ✅ Protected getter for subclasses
   StellarSDK? get quickNodeSdk => _sdkQuickNode;
 
   bool get isTestnet => identical(sdk, StellarSDK.TESTNET);
@@ -67,10 +61,6 @@ abstract class StellarBaseService {
       : 'https://horizon.stellar.org';
 
   String? get _qnBase => isTestnet ? quickNodeUrlTestnet : quickNodeUrlMainnet;
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Error Helpers
-  // ──────────────────────────────────────────────────────────────────────────
 
   static String fmt7(num v) => v.toStringAsFixed(7);
 
@@ -184,10 +174,6 @@ abstract class StellarBaseService {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // HTTP with fallback
-  // ──────────────────────────────────────────────────────────────────────────
-
   Future<dynamic> getWithFallback(
     String path, {
     Map<String, String>? query,
@@ -235,10 +221,6 @@ abstract class StellarBaseService {
     }
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // SSE Stream with Fallback
-  // ──────────────────────────────────────────────────────────────────────────
-
   Stream<T> sseWithFallback<T>(Stream<T> Function(StellarSDK s) build) {
     final controller = StreamController<T>();
     StreamSubscription<T>? sub;
@@ -274,44 +256,54 @@ abstract class StellarBaseService {
       });
     }
 
+    Future<void> handleFailure(
+      StellarSDK activeSdk,
+      Object error, [
+      StackTrace? stackTrace,
+    ]) async {
+      if (closed) return;
+      if (!usingQuickNode &&
+          _sdkQuickNode != null &&
+          !identical(activeSdk, _sdkQuickNode)) {
+        usingQuickNode = true;
+
+        try {
+          await sub?.cancel();
+        } catch (_) {}
+
+        sub = null;
+        await start(_sdkQuickNode);
+        return;
+      }
+
+      if (!controller.isClosed) {
+        controller.addError(error, stackTrace);
+      }
+      await scheduleRetry();
+    }
+
     start = (StellarSDK s) async {
       if (closed) return;
-      try {
-        final stream = build(s);
-        sub = stream.listen(
-          (event) {
-            retryAttempt = 0;
-            controller.add(event);
-          },
-          onError: (e, st) async {
-            if (!usingQuickNode &&
-                _sdkQuickNode != null &&
-                !identical(s, _sdkQuickNode)) {
-              usingQuickNode = true;
-
-              try {
-                await sub?.cancel();
-              } catch (_) {}
-
-              await start(_sdkQuickNode);
-            } else {
+      await runZonedGuarded(
+        () async {
+          final stream = build(s);
+          sub = stream.listen(
+            (event) {
+              retryAttempt = 0;
+              controller.add(event);
+            },
+            onError: (e, st) async {
+              await handleFailure(s, e, st);
+            },
+            onDone: () async {
               await scheduleRetry();
-            }
-          },
-          onDone: () async {
-            await scheduleRetry();
-          },
-        );
-      } catch (e) {
-        if (!usingQuickNode &&
-            _sdkQuickNode != null &&
-            !identical(s, _sdkQuickNode)) {
-          usingQuickNode = true;
-          await start(_sdkQuickNode);
-        } else {
-          await scheduleRetry();
-        }
-      }
+            },
+          );
+        },
+        (error, stackTrace) async {
+          await handleFailure(s, error, stackTrace);
+        },
+      );
     };
 
     unawaited(start(sdk));
@@ -326,10 +318,6 @@ abstract class StellarBaseService {
 
     return controller.stream;
   }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Utilities
-  // ──────────────────────────────────────────────────────────────────────────
 
   int toStroops(double amount) => (amount * 1e7).round();
 

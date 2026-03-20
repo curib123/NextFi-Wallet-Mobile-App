@@ -5,13 +5,10 @@ class CountryModel {
     required this.flag,
   });
 
-  /// Common name (e.g. "Philippines")
   final String name;
 
-  /// ISO 3166-1 alpha-2 code (e.g. "PH")
   final String code;
 
-  /// Unicode flag emoji (e.g. "🇵🇭")
   final String flag;
 
   factory CountryModel.fromJson(Map<String, dynamic> json) {

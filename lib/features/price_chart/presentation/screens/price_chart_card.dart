@@ -1,4 +1,3 @@
-// lib/features/price_chart/view/price_chart_card.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -26,7 +25,7 @@ class PriceChartCard extends ConsumerStatefulWidget {
   final String title;
   final bool compact;
   final bool isForDashboard;
-  final String token; // "XLM" | "USDC"
+  final String token;
   final Color? accentColor;
   final ValueChanged<String>? onTokenChanged;
 
@@ -42,11 +41,7 @@ class _PriceChartCardState extends ConsumerState<PriceChartCard> {
     super.initState();
     final currency = ref.read(currencyVmProvider);
     final assets = ref.read(assetVmProvider);
-    _vm = PriceChartVM(
-      currency,
-      assets,
-      initialAssetKey: widget.token,
-    );
+    _vm = PriceChartVM(currency, assets, initialAssetKey: widget.token);
   }
 
   @override
@@ -102,16 +97,13 @@ class _PriceChartView extends StatelessWidget {
     final pad = compact ? const EdgeInsets.all(12) : const EdgeInsets.all(16);
     final chartAccent = accentColor ?? (vm.isUp ? c.primary : c.error);
 
-    final displayTitle =
-        title == 'XLM Price' ? '${vm.assetCode} Price' : title;
+    final displayTitle = title == 'XLM Price' ? '${vm.assetCode} Price' : title;
     final availableAssets = vm.availableAssets;
     final activeAsset = vm.activeAsset;
 
-    // Single source of truth for values on the chart (already FIAT)
     final displaySeries = vm.displaySeries;
     final timeLabels = vm.timeLabels;
 
-    // Header value: hovered (fiat) else live-now (fiat)
     final shown = vm.hoveredPrice ?? vm.priceNow;
 
     String fmtPrice(double v) =>
@@ -137,7 +129,6 @@ class _PriceChartView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -183,7 +174,9 @@ class _PriceChartView extends StatelessWidget {
                         duration: const Duration(milliseconds: 250),
                         child: Text(
                           '${fmtPrice(shown)} ${vm.fiatCode}',
-                          key: ValueKey('${vm.assetCode}_${shown}_${vm.fiatCode}'),
+                          key: ValueKey(
+                            '${vm.assetCode}_${shown}_${vm.fiatCode}',
+                          ),
                           style: TextStyle(
                             fontSize: compact ? 20 : 24,
                             fontWeight: FontWeight.w800,
@@ -200,7 +193,6 @@ class _PriceChartView extends StatelessWidget {
             ),
             SizedBox(height: compact ? 8 : 12),
 
-            // Chart
             AspectRatio(
               aspectRatio: compact ? 16 / 6 : 16 / 7,
               child: ChartArea(
@@ -208,19 +200,14 @@ class _PriceChartView extends StatelessWidget {
                 positive: vm.isUp,
                 accentColor: chartAccent,
 
-                // VM computes hoveredPrice from its own displaySeries
                 onHoverIndex: vm.setHoverIndex,
 
-                // Axis/bubble formatter (no extra conversion here)
                 formatPrice: fmtPrice,
 
-                // Sticky "current" (fiat) â€” VM already does live-first fallback
                 currentPrice: vm.priceNow,
 
-                // Time labels (hour/day/month per range)
                 timeLabels: timeLabels,
 
-                // Left-side labels
                 showYAxisLabels: true,
                 gridRows: 3,
               ),
@@ -228,11 +215,7 @@ class _PriceChartView extends StatelessWidget {
 
             SizedBox(height: compact ? 8 : 12),
 
-            // Range
-            RangeTabs(
-              range: vm.range,
-              onChanged: vm.setRange,
-            ),
+            RangeTabs(range: vm.range, onChanged: vm.setRange),
           ],
         ),
       ),

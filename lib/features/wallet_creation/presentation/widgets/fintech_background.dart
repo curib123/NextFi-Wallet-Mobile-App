@@ -1,4 +1,3 @@
-// lib/features/wallet_creation/view/widgets/fintech_background.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -23,7 +22,6 @@ class FintechBackground extends StatelessWidget {
 
     return Stack(
       children: [
-        // Animated gradient background
         Positioned.fill(
           child: CustomPaint(
             painter: _FintechBackgroundPainter(
@@ -36,7 +34,6 @@ class FintechBackground extends StatelessWidget {
           ),
         ),
 
-        // Crypto visual elements overlay
         Positioned.fill(
           child: CustomPaint(
             painter: _CryptoElementsPainter(progress: progress, colors: colors),
@@ -64,7 +61,6 @@ class _FintechBackgroundPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1) Base radial gradient - full screen
     final radialRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final radialGradient = RadialGradient(
       center: const Alignment(0.3, -0.4),
@@ -80,7 +76,6 @@ class _FintechBackgroundPainter extends CustomPainter {
       Paint()..shader = radialGradient.createShader(radialRect),
     );
 
-    // 2) Animated subtle grid texture - full screen
     final hiDpi = devicePixelRatio >= 2.75;
     const step = 35.0;
     final drift = progress * step;
@@ -110,7 +105,6 @@ class _FintechBackgroundPainter extends CustomPainter {
       }
     }
 
-    // 3) Top to bottom diagonal gradient overlay - no clipping
     final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final diag = Paint()
       ..shader = LinearGradient(
@@ -125,12 +119,10 @@ class _FintechBackgroundPainter extends CustomPainter {
       ).createShader(fullRect);
     canvas.drawRect(fullRect, diag);
 
-    // 4) Multiple flowing waves - positioned in upper portion
     final ph = progress * 2 * math.pi;
     final waveTopArea = size.height * topBandFraction;
     final base = waveTopArea * .58;
 
-    // Wave 1 (main)
     final wave1Path = _createWavePath(
       size: size,
       topH: waveTopArea,
@@ -160,7 +152,6 @@ class _FintechBackgroundPainter extends CustomPainter {
       ).createShader(waveRect);
     canvas.drawPath(wave1Area, area1Paint);
 
-    // 5) Animated nodes on main wave
     final wave1Points = _getWavePoints(
       size: size,
       topH: waveTopArea,
@@ -180,13 +171,10 @@ class _FintechBackgroundPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     for (var i = 0; i < wave1Points.length; i += 45) {
-      // Glow
       canvas.drawCircle(wave1Points[i], 6, nodeGlowPaint);
-      // Node
       canvas.drawCircle(wave1Points[i], 1.8, nodePaint);
     }
 
-    // 6) Bottom gradient - adaptive for light and dark modes
     final bottomRect = Rect.fromLTWH(
       0,
       size.height * .3,
@@ -199,14 +187,12 @@ class _FintechBackgroundPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: isDark
             ? [
-                // Dark mode: subtle blue depth, avoid bright/white veil.
                 colors.surface.withValues(alpha: .0),
                 colors.primary.withValues(alpha: .03),
                 colors.primary.withValues(alpha: .06),
                 colors.surface.withValues(alpha: .22),
               ]
             : [
-                // Light mode: soft tint without fogging the content.
                 colors.surface.withValues(alpha: .0),
                 colors.primary.withValues(alpha: .03),
                 colors.primary.withValues(alpha: .05),
@@ -280,7 +266,6 @@ class _CryptoElementsPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final ph = progress * 2 * math.pi;
 
-    // Floating hexagons - spread across full screen
     _drawFloatingHexagon(
       canvas,
       size,
@@ -317,10 +302,8 @@ class _CryptoElementsPainter extends CustomPainter {
       rotation: progress * math.pi * 0.6,
     );
 
-    // Connection lines between elements
     _drawConnectionLines(canvas, size, ph);
 
-    // Floating circular elements (like blockchain nodes) - spread throughout
     _drawBlockchainNodes(canvas, size, ph);
   }
 
@@ -348,7 +331,6 @@ class _CryptoElementsPainter extends CustomPainter {
     }
     path.close();
 
-    // Glow
     final glowPaint = Paint()
       ..color = colors.primary.withValues(alpha: .025)
       ..style = PaintingStyle.stroke
@@ -356,14 +338,12 @@ class _CryptoElementsPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     canvas.drawPath(path, glowPaint);
 
-    // Stroke
     final strokePaint = Paint()
       ..color = colors.primary.withValues(alpha: .08)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawPath(path, strokePaint);
 
-    // Inner glow
     final innerGlowPaint = Paint()
       ..color = colors.primary.withValues(alpha: .015)
       ..style = PaintingStyle.fill;
@@ -376,7 +356,6 @@ class _CryptoElementsPainter extends CustomPainter {
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 
-    // Multiple diagonal connections across the screen
     final y1 = size.height * 0.20 + math.sin(phase * 0.7) * 15;
     final y2 = size.height * 0.30 + math.cos(phase * 0.5) * 20;
     final y3 = size.height * 0.50 + math.sin(phase * 0.6) * 10;
@@ -437,7 +416,6 @@ class _CryptoElementsPainter extends CustomPainter {
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
 
-    // Nodes distributed throughout the screen
     final nodes = [
       Offset(size.width * 0.25, size.height * 0.45 + math.sin(phase * 0.8) * 8),
       Offset(
@@ -453,15 +431,12 @@ class _CryptoElementsPainter extends CustomPainter {
     ];
 
     for (final node in nodes) {
-      // Outer glow
       canvas.drawCircle(node, 12, nodeGlowPaint);
-      // Inner ring
       final ringPaint = Paint()
         ..color = colors.primary.withValues(alpha: .08)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5;
       canvas.drawCircle(node, 6, ringPaint);
-      // Center dot
       canvas.drawCircle(node, 2, nodePaint);
     }
   }

@@ -1,9 +1,12 @@
-// lib/features/auth_gate/view/widgets/lockout_banner.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
 class LockoutBanner extends StatelessWidget {
-  const LockoutBanner({super.key, required this.remaining, required this.colors});
+  const LockoutBanner({
+    super.key,
+    required this.remaining,
+    required this.colors,
+  });
   final Duration remaining;
   final AppColor colors;
 

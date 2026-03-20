@@ -102,4 +102,3 @@ class ScanControls extends StatelessWidget {
     );
   }
 }
-

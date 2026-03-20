@@ -1,4 +1,3 @@
-// lib/features/send/view/widgets/recipient_loading_line.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
@@ -10,7 +9,6 @@ class RecipientLoadingLine extends StatelessWidget {
     final c = AppColor.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Solid surface tint — no opacity
     final bgColor = isDark ? c.textPrimary : c.surface;
     final borderColor = isDark ? c.textPrimary : c.border;
     final spinnerColor = isDark ? c.primary : c.primary;
@@ -48,4 +46,3 @@ class RecipientLoadingLine extends StatelessWidget {
     );
   }
 }
-

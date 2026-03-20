@@ -88,7 +88,6 @@ class TradesListQuery {
   };
 }
 
-/// Request to lock crypto into escrow (Step B in both flows)
 class LockCryptoRequest {
   final String claimableBalanceId;
   final String createTxHash;
@@ -104,7 +103,6 @@ class LockCryptoRequest {
   };
 }
 
-/// Request to claim crypto from escrow (Step E in both flows)
 class ClaimCryptoRequest {
   final String claimTxHash;
 
@@ -113,7 +111,6 @@ class ClaimCryptoRequest {
   Map<String, dynamic> toJson() => {'claimTxHash': claimTxHash};
 }
 
-/// Request to refund crypto from expired escrow
 class RefundCryptoRequest {
   final String refundTxHash;
 
@@ -122,10 +119,9 @@ class RefundCryptoRequest {
   Map<String, dynamic> toJson() => {'refundTxHash': refundTxHash};
 }
 
-/// Request to upload payment proof
 class UploadPaymentProofRequest {
   final String tradeId;
-  final String type; // 'FIAT' or 'CRYPTO'
+  final String type;
   final String? note;
   final String? referenceNo;
   final String? txHash;
@@ -148,7 +144,6 @@ class UploadPaymentProofRequest {
   };
 }
 
-/// Request to open a dispute
 class OpenDisputeRequest {
   final String tradeId;
   final String reason;

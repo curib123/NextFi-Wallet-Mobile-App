@@ -25,18 +25,13 @@ class ReceiveControllerArgs {
   }
 
   @override
-  int get hashCode => Object.hash(
-    address,
-    initialAssetId,
-  );
+  int get hashCode => Object.hash(address, initialAssetId);
 }
 
-final receiveControllerProvider =
-    NotifierProvider.autoDispose.family<
-      ReceiveController,
-      ReceiveViewState,
-      ReceiveControllerArgs
-    >(ReceiveController.new);
+final receiveControllerProvider = NotifierProvider.autoDispose
+    .family<ReceiveController, ReceiveViewState, ReceiveControllerArgs>(
+      ReceiveController.new,
+    );
 
 class ReceiveController extends Notifier<ReceiveViewState> {
   ReceiveController(this.args);
@@ -54,7 +49,8 @@ class ReceiveController extends Notifier<ReceiveViewState> {
     );
   }
 
-  ReceiveFederationService get _service => ref.read(receiveFederationServiceProvider);
+  ReceiveFederationService get _service =>
+      ref.read(receiveFederationServiceProvider);
 
   void selectAsset(String assetKey) {
     final normalized = assetKey.trim();
@@ -198,10 +194,7 @@ class ReceiveController extends Notifier<ReceiveViewState> {
       return false;
     }
 
-    state = state.copyWith(
-      editingFederationId: id,
-      editFederationError: null,
-    );
+    state = state.copyWith(editingFederationId: id, editFederationError: null);
 
     try {
       await _service.update(
@@ -228,10 +221,7 @@ class ReceiveController extends Notifier<ReceiveViewState> {
   }
 
   Future<void> _loadFederationAddresses() async {
-    state = state.copyWith(
-      federationLoading: true,
-      federationError: null,
-    );
+    state = state.copyWith(federationLoading: true, federationError: null);
 
     try {
       final items = await _service.listMine();

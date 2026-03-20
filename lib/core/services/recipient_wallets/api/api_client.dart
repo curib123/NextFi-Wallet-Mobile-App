@@ -27,7 +27,9 @@ class ApiClient {
     if (auth) {
       final token = await tokenProvider();
       if (token == null || token.isEmpty) {
-        throw StateError('Not authenticated: JWT is required for this endpoint.');
+        throw StateError(
+          'Not authenticated: JWT is required for this endpoint.',
+        );
       }
       h['Authorization'] = 'Bearer $token';
     }
@@ -44,7 +46,11 @@ class ApiClient {
     return Exception('HTTP ${r.statusCode}: $body');
   }
 
-  Future<dynamic> get(String path, {bool auth = true, Map<String, String>? queryParams}) async {
+  Future<dynamic> get(
+    String path, {
+    bool auth = true,
+    Map<String, String>? queryParams,
+  }) async {
     var uri = _u(path);
     if (queryParams != null && queryParams.isNotEmpty) {
       uri = uri.replace(queryParameters: queryParams);
@@ -54,7 +60,11 @@ class ApiClient {
     throw _err(r);
   }
 
-  Future<dynamic> post(String path, Map<String, dynamic> body, {bool auth = true}) async {
+  Future<dynamic> post(
+    String path,
+    Map<String, dynamic> body, {
+    bool auth = true,
+  }) async {
     final r = await _client.post(
       _u(path),
       headers: await _headers(auth: auth),
@@ -64,7 +74,11 @@ class ApiClient {
     throw _err(r);
   }
 
-  Future<dynamic> patch(String path, Map<String, dynamic> body, {bool auth = true}) async {
+  Future<dynamic> patch(
+    String path,
+    Map<String, dynamic> body, {
+    bool auth = true,
+  }) async {
     final r = await _client.patch(
       _u(path),
       headers: await _headers(auth: auth),
@@ -75,7 +89,10 @@ class ApiClient {
   }
 
   Future<dynamic> delete(String path, {bool auth = true}) async {
-    final r = await _client.delete(_u(path), headers: await _headers(auth: auth));
+    final r = await _client.delete(
+      _u(path),
+      headers: await _headers(auth: auth),
+    );
     if (r.statusCode >= 200 && r.statusCode < 300) return _decode(r);
     throw _err(r);
   }

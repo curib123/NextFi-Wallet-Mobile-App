@@ -8,7 +8,6 @@ import '../models/profile_dtos.dart';
 import '../models/profile_models.dart';
 import 'profile_endpoints.dart';
 
-
 typedef TokenProvider = Future<String?> Function();
 
 class ProfileService {
@@ -181,5 +180,4 @@ class ProfileService {
 
     return true;
   }
-
 }

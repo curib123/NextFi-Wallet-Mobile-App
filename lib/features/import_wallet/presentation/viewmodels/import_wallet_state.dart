@@ -1,9 +1,8 @@
-// lib/features/import_wallet/model/import_wallet_state.dart
 class ImportWalletState {
-  final String rawText;              // user-entered text (unvalidated)
-  final List<String> suggestions;    // completion suggestions (<=6)
-  final bool importing;              // in-flight flag
-  final String? error;               // optional error string
+  final String rawText;
+  final List<String> suggestions;
+  final bool importing;
+  final String? error;
 
   const ImportWalletState({
     this.rawText = "",
@@ -12,16 +11,15 @@ class ImportWalletState {
     this.error,
   });
 
-  int get wordCount =>
-      rawText.trim().isEmpty
-          ? 0
-          : rawText.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+  int get wordCount => rawText.trim().isEmpty
+      ? 0
+      : rawText.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
 
   ImportWalletState copyWith({
     String? rawText,
     List<String>? suggestions,
     bool? importing,
-    String? error, // set '' to clear
+    String? error,
   }) {
     return ImportWalletState(
       rawText: rawText ?? this.rawText,

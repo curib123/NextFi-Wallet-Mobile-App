@@ -42,11 +42,8 @@ class VerificationFlowService {
       PaymentMethodAndAccountsCoreService.I;
 
   Future<VerificationFlowSnapshot> getSnapshot() async {
-    // Verification status is required for this screen.
     final verification = await _verification.getMe();
 
-    // Profile/payment are best-effort so the screen still works even if
-    // one dependency endpoint is temporarily unavailable.
     ProfileModel? profile;
     try {
       profile = await _profile.getMe();
@@ -98,19 +95,15 @@ class VerificationFlowService {
     );
     if (!hasActivePayment) return VerificationStep.paymentMethodSetup;
 
-    // Step 3: verification submission (phone + selfie + government IDs).
     final submissionDone = verification.hasSubmittedRequiredDocuments;
     if (!submissionDone) return VerificationStep.selfieVerification;
 
-    // Server status is authoritative after all required local steps are met.
     if (verification.status == TrustStatus.reviewing ||
         verification.status == TrustStatus.ready ||
         verification.status == TrustStatus.suspended) {
       return VerificationStep.completed;
     }
 
-    // BASIC after previous submission (e.g., rejection) should route back to
-    // verification step for targeted resubmission.
     return VerificationStep.selfieVerification;
   }
 

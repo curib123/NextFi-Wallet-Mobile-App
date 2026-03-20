@@ -4,8 +4,6 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/theme/app_fonts.dart';
 
-/// App-level overlay that wraps the entire widget tree and shows an animated
-/// bottom banner while the device is offline, then briefly confirms reconnect.
 class NetworkStatusOverlay extends ConsumerWidget {
   const NetworkStatusOverlay({super.key, required this.child});
 

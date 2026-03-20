@@ -11,9 +11,6 @@ import 'package:next_fi/core/widgets/button/custom_button.dart';
 import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 
-/// Call this to open the sheet.
-/// Returns true if something was saved.
-/// You can pass [address] to prefill the address field.
 Future<bool?> showRecipientUpsertSheet(
   BuildContext context, {
   RecipientAddressModel? initial,
@@ -54,14 +51,14 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
   void _onFocusChange() => setState(() {});
 
   static const _palette = <int>[
-    0xFF7B16FF, // Stellar purple
-    0xFF00D4FF, // Cyan
-    0xFF00E676, // Green
-    0xFFFFB300, // Amber
-    0xFFFF1744, // Red
-    0xFF627EEA, // Ethereum blue
-    0xFFF7931A, // Bitcoin orange
-    0xFF9C27B0, // Purple
+    0xFF7B16FF,
+    0xFF00D4FF,
+    0xFF00E676,
+    0xFFFFB300,
+    0xFFFF1744,
+    0xFF627EEA,
+    0xFFF7931A,
+    0xFF9C27B0,
   ];
 
   @override
@@ -86,7 +83,6 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
 
     _animController.forward();
 
-    // Prefill address if provided
     if ((_addr.text.isEmpty) &&
         (widget.address != null) &&
         widget.address!.trim().isNotEmpty) {
@@ -190,7 +186,6 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
     } catch (e) {
       if (!mounted) return;
 
-      // Show error message
       showFloatingSnackBar(
         context,
         message: _friendlyError(e),
@@ -292,7 +287,6 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
             ],
           ),
 
-          // Auth warning banner
           if (!prov.loading && !prov.isAuthenticated)
             Container(
               margin: const EdgeInsets.only(top: 16),
@@ -592,7 +586,6 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Name field
                         _buildInputField(
                           controller: _name,
                           focusNode: _nameFocus,
@@ -607,7 +600,6 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
                         ),
                         const SizedBox(height: 20),
 
-                        // Address field
                         _buildInputField(
                           controller: _addr,
                           focusNode: _addrFocus,
@@ -635,7 +627,6 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
                         _addressStatus(),
                         const SizedBox(height: 24),
 
-                        // Color picker
                         _colorPicker(),
                         const SizedBox(height: 32),
                       ],

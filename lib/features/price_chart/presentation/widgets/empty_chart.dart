@@ -1,4 +1,3 @@
-// lib/features/price_chart/view/widgets/empty_chart.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/core/widgets/empty_state/empty_state.dart';
 

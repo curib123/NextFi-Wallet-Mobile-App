@@ -3,16 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Simple helper for opening links (and common explorer links).
-/// Defaults to opening in the external browser.
 class LinkOpener {
-  /// Opens a raw [url]. If it can't launch, copies to clipboard and notifies.
   static Future<void> open(
-      BuildContext context,
-      String url, {
-        bool external = true,
-        String? fallbackLabel, // e.g., "Explorer link"
-      }) async {
+    BuildContext context,
+    String url, {
+    bool external = true,
+    String? fallbackLabel,
+  }) async {
     if (url.isEmpty) {
       _toast(context, 'No link available');
       return;
@@ -20,7 +17,6 @@ class LinkOpener {
 
     final uri = Uri.tryParse(url);
     if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
-      // Allow deep-link schemes too (e.g., app://) Ã¢â‚¬â€ try anyway if parse ok.
       final deep = Uri.tryParse(url);
       if (deep == null) {
         _toast(context, 'Invalid link');
@@ -34,19 +30,18 @@ class LinkOpener {
 
     final mode = external
         ? LaunchMode.externalApplication
-        : LaunchMode.platformDefault; // may open in-app if supported
+        : LaunchMode.platformDefault;
 
     final ok = await launchUrl(uri, mode: mode);
     if (!context.mounted) return;
     if (!ok) _copyFallback(context, url, label: fallbackLabel);
   }
 
-  /// Opens a Stellar Expert transaction page by [hash].
   static Future<void> openStellarTx(
-      BuildContext context, {
-        required String hash,
-        bool isTestnet = false,
-      }) async {
+    BuildContext context, {
+    required String hash,
+    bool isTestnet = false,
+  }) async {
     if (hash.isEmpty) {
       _toast(context, 'No transaction hash');
       return;
@@ -56,12 +51,11 @@ class LinkOpener {
     await open(context, url, fallbackLabel: 'Explorer link');
   }
 
-  /// Opens a Stellar Expert account page by [address] (G...).
   static Future<void> openStellarAccount(
-      BuildContext context, {
-        required String address,
-        bool isTestnet = false,
-      }) async {
+    BuildContext context, {
+    required String address,
+    bool isTestnet = false,
+  }) async {
     if (address.isEmpty) {
       _toast(context, 'No account address');
       return;
@@ -71,7 +65,11 @@ class LinkOpener {
     await open(context, url, fallbackLabel: 'Explorer link');
   }
 
-  static void _copyFallback(BuildContext context, String url, {String? label}) async {
+  static void _copyFallback(
+    BuildContext context,
+    String url, {
+    String? label,
+  }) async {
     await Clipboard.setData(ClipboardData(text: url));
     if (!context.mounted) return;
     _toast(context, '${label ?? "Link"} copied to clipboard');

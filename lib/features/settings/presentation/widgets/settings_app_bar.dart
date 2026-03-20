@@ -1,4 +1,3 @@
-// lib/features/settings/view/widgets/settings_app_bar.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer_button.dart';

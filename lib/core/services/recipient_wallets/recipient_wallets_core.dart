@@ -1,19 +1,3 @@
-// lib/services/recipient_wallets/recipient_wallets_core.dart
-//
-// Core / single place to access Recipient Wallets API.
-// Uses:
-//   - _baseUrl = centralizedBaseUrl
-//   - TokenStorage (FlutterSecureStorage)
-//
-// Usage:
-//   final recipientCore = RecipientWalletsCore();
-//   await recipientCore.addRecipient(label: "Mom", address: "GCFH...");
-//   final recipients = await recipientCore.getAllRecipients();
-//   await recipientCore.searchRecipients(query: "mom");
-//   await recipientCore.updateRecipient(id: "...", label: "Mother");
-//   await recipientCore.toggleRecipient(id: "...");
-//   await recipientCore.deleteRecipient(id: "...");
-
 import 'package:next_fi/core/services/recipient_wallets/recipient_wallets_service.dart';
 import 'package:next_fi/core/services/recipient_wallets/models/recipient_wallet_models.dart';
 
@@ -33,11 +17,6 @@ class RecipientWalletsCore {
     );
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-  // Convenience helpers (UI-friendly)
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
-  /// Add a new recipient wallet address (JWT required).
   Future<RecipientWallet> addRecipient({
     String? name,
     String? label,
@@ -45,7 +24,7 @@ class RecipientWalletsCore {
     String? publicAddress,
     String? network,
     String? colorTag,
-    String? color, // legacy alias
+    String? color,
     bool? isActive,
     String? memo,
     String? memoType,
@@ -69,7 +48,6 @@ class RecipientWalletsCore {
     );
   }
 
-  /// Get all recipient wallets (optionally filtered by network and active status).
   Future<List<RecipientWallet>> getAllRecipients({
     String? network,
     bool activeOnly = false,
@@ -80,7 +58,6 @@ class RecipientWalletsCore {
     );
   }
 
-  /// Search recipients by name or address (JWT required).
   Future<List<RecipientWallet>> searchRecipients({
     required String query,
     String? network,
@@ -93,12 +70,10 @@ class RecipientWalletsCore {
     );
   }
 
-  /// Get a specific recipient by ID (JWT required).
   Future<RecipientWallet> getRecipient(String id) {
     return svc.recipientWallets.getById(id);
   }
 
-  /// Update recipient details (JWT required).
   Future<RecipientWallet> updateRecipient({
     required String id,
     String? name,
@@ -107,7 +82,7 @@ class RecipientWalletsCore {
     String? publicAddress,
     String? network,
     String? colorTag,
-    String? color, // legacy alias
+    String? color,
     bool? isActive,
     String? memo,
     String? memoType,
@@ -124,22 +99,18 @@ class RecipientWalletsCore {
     );
   }
 
-  /// Toggle recipient active status (JWT required).
   Future<RecipientWallet> toggleRecipient(String id) {
     return svc.recipientWallets.toggleActive(id);
   }
 
-  /// Delete a recipient (JWT required).
   Future<bool> deleteRecipient(String id) {
     return svc.recipientWallets.delete(id);
   }
 
-  /// Get only active recipients (convenience method).
   Future<List<RecipientWallet>> getActiveRecipients({String? network}) {
     return getAllRecipients(network: network, activeOnly: true);
   }
 
-  /// Get recipients for a specific network.
   Future<List<RecipientWallet>> getRecipientsByNetwork(
     String network, {
     bool activeOnly = false,
@@ -147,6 +118,5 @@ class RecipientWalletsCore {
     return getAllRecipients(network: network, activeOnly: activeOnly);
   }
 
-  /// Optional: free http client.
   void dispose() => svc.dispose();
 }

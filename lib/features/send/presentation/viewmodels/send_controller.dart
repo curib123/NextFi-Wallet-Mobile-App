@@ -356,4 +356,3 @@ class SendController extends Notifier<SendState> {
 
   double _floor7(double value) => (value * 1e7).floor() / 1e7;
 }
-

@@ -3,7 +3,6 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/incoming_payment_hint.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 
-/// Shows up to 2 latest incoming hint cards with smooth animations
 class IncomingHintsStrip extends StatelessWidget {
   const IncomingHintsStrip({
     super.key,

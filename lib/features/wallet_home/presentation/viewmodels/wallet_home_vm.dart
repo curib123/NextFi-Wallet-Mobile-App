@@ -1,4 +1,3 @@
-// lib/features/wallet_home/view_model/wallet_home_vm.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -18,10 +17,8 @@ import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 
-/// UI-neutral severity for toasts/snackbars
 enum UiSeverity { info, success, warning, error }
 
-/// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ UI events (view-agnostic) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 abstract class WalletHomeUiEvent {
   const WalletHomeUiEvent();
 }
@@ -57,14 +54,12 @@ class TransactionConfirmedEvent extends WalletHomeUiEvent {
   });
 }
 
-/// Ask the View to show a short message
 class ShowToastEvent extends WalletHomeUiEvent {
   final String message;
   final UiSeverity severity;
   const ShowToastEvent(this.message, this.severity);
 }
 
-/// Navigation / flow intents (View decides the actual UI)
 class StartSendFlow extends WalletHomeUiEvent {
   final String address;
   final double xlm;
@@ -93,12 +88,10 @@ class NavigateToSwap extends WalletHomeUiEvent {
   const NavigateToSwap();
 }
 
-/// Emitted when user is not authenticated and needs to login first.
 class NavigateToLogin extends WalletHomeUiEvent {
   const NavigateToLogin();
 }
 
-/// Emitted when buy flow should start (user is authenticated).
 class StartBuyFlow extends WalletHomeUiEvent {
   final String address;
   final double xlm;
@@ -110,7 +103,6 @@ class StartBuyFlow extends WalletHomeUiEvent {
   });
 }
 
-/// Emitted when sell flow should start (user is authenticated).
 class StartSellFlow extends WalletHomeUiEvent {
   final String address;
   final double xlm;
@@ -122,7 +114,6 @@ class StartSellFlow extends WalletHomeUiEvent {
   });
 }
 
-/// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ViewModel Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 class WalletHomeVM extends ChangeNotifier {
   WalletHomeVM({
     required StellarWalletServices stellar,
@@ -146,9 +137,7 @@ class WalletHomeVM extends ChangeNotifier {
       encryptedSharedPreferences: true,
       resetOnError: true,
     ),
-    iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
-    ),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
   static const String _balancesCacheKeyPrefix =
       'nextfi.wallet_home.balance_snapshot.v1.';
@@ -174,7 +163,6 @@ class WalletHomeVM extends ChangeNotifier {
     SchedulerBinding.instance.scheduleFrame();
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ UI events stream (for the View) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   final StreamController<WalletHomeUiEvent> _ui =
       StreamController<WalletHomeUiEvent>.broadcast();
   Stream<WalletHomeUiEvent> get uiEvents => _ui.stream;
@@ -183,7 +171,6 @@ class WalletHomeVM extends ChangeNotifier {
     if (!_ui.isClosed && !_disposed) _ui.add(e);
   }
 
-  // Realtime + timers
   static const Duration _minBalancesGap = Duration(minutes: 1);
   static const Duration _inactiveRefreshThreshold = Duration(minutes: 5);
   static const Duration _debounceDelay = Duration(milliseconds: 400);
@@ -205,9 +192,6 @@ class WalletHomeVM extends ChangeNotifier {
   String? _lastBoundAddress;
   String? _lastAutoSavedAddress;
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Auth check helper Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
-  /// Returns true if user has valid OAuth tokens
   Future<bool> _isAuthenticated() async {
     try {
       final has = await _tokenStorage.hasTokens;
@@ -218,7 +202,6 @@ class WalletHomeVM extends ChangeNotifier {
     }
   }
 
-  /// Ensures auth before protected flows
   Future<bool> _requireAuth() async {
     final authed = await _isAuthenticated();
 
@@ -230,8 +213,6 @@ class WalletHomeVM extends ChangeNotifier {
 
     return true;
   }
-
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Buy / Sell Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
   Future<void> onBuyPressed() async {
     if (!_state.hasWallet || _state.address == null) {
@@ -285,8 +266,6 @@ class WalletHomeVM extends ChangeNotifier {
 
   Future<bool> hasTradeAccess() => _flowService.hasTradeAccess();
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Binding helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
   void bindToAddress(String? addr) {
     final address = (addr ?? '').trim();
 
@@ -333,8 +312,6 @@ class WalletHomeVM extends ChangeNotifier {
   }
 
   void bindToSeedVM() => bindToAddress(_seedVM.accountId);
-
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Public API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
   Future<void> boot() async {
     if (_state.loadingWallet) return;
@@ -690,8 +667,7 @@ class WalletHomeVM extends ChangeNotifier {
 
     startRealtime();
 
-    if (inactiveFor == null ||
-        inactiveFor >= _inactiveRefreshThreshold) {
+    if (inactiveFor == null || inactiveFor >= _inactiveRefreshThreshold) {
       _kickRefreshInBackground(force: inactiveFor != null);
     }
   }
@@ -715,8 +691,6 @@ class WalletHomeVM extends ChangeNotifier {
 
     super.dispose();
   }
-
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Private helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
   bool _isStale(DateTime? last, Duration gap) {
     if (last == null) return true;
@@ -822,7 +796,8 @@ class WalletHomeVM extends ChangeNotifier {
       final balanceMap = _normalizeBalancesMap(decoded['balancesByAssetId']);
       final lastBalancesAt = _parseDateTime(decoded['lastBalancesAt']);
       final lastReservesAt = _parseDateTime(decoded['lastReservesAt']);
-      final hasSnapshot = balanceMap.isNotEmpty ||
+      final hasSnapshot =
+          balanceMap.isNotEmpty ||
           lastBalancesAt != null ||
           lastReservesAt != null;
       if (!hasSnapshot) return;
@@ -833,8 +808,7 @@ class WalletHomeVM extends ChangeNotifier {
           hasHydratedBalances: true,
           lastBalancesAt: lastBalancesAt,
           xlmBaseReserve: _toDouble(decoded['xlmBaseReserve']) ?? 1.0,
-          xlmTrustlineReserve:
-              _toDouble(decoded['xlmTrustlineReserve']) ?? 0.0,
+          xlmTrustlineReserve: _toDouble(decoded['xlmTrustlineReserve']) ?? 0.0,
           xlmTotalReserve: _toDouble(decoded['xlmTotalReserve']) ?? 1.0,
           trustlineCount: _toInt(decoded['trustlineCount']) ?? 0,
           lastReservesAt: lastReservesAt,
@@ -906,4 +880,3 @@ class WalletHomeVM extends ChangeNotifier {
     return const <String, double>{};
   }
 }
-

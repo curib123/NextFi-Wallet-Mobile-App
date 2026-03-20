@@ -19,7 +19,8 @@ class AccountState {
   }
 
   double balanceFor(String assetKey) => balancesByAssetKey[assetKey] ?? 0.0;
-  bool hasTrustlineFor(String assetKey) => trustlinesByAssetKey[assetKey] ?? false;
+  bool hasTrustlineFor(String assetKey) =>
+      trustlinesByAssetKey[assetKey] ?? false;
 
   double get xlm => balanceFor(nativeAssetKey);
   double get usdc => balanceFor('USDC');
@@ -48,7 +49,7 @@ class FeeEstimate {
 class PairPrice {
   final String baseAssetKey;
   final String counterAssetKey;
-  final double counterPerBase; // counter/base price
+  final double counterPerBase;
   double get basePerCounter => counterPerBase == 0 ? 0 : 1 / counterPerBase;
   final DateTime at;
   const PairPrice({

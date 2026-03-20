@@ -29,8 +29,8 @@ class RecipientWallet {
     required this.updatedAt,
   });
 
-  // Backward-compatible aliases for existing UI code.
-  String get displayName => name.trim().isNotEmpty ? name.trim() : (label ?? '').trim();
+  String get displayName =>
+      name.trim().isNotEmpty ? name.trim() : (label ?? '').trim();
   String get effectiveAddress =>
       publicAddress.trim().isNotEmpty ? publicAddress : (address ?? '');
 
@@ -48,7 +48,9 @@ class RecipientWallet {
 
   factory RecipientWallet.fromJson(Map<String, dynamic> json) {
     final rawName = _asString(json['name'] ?? json['label']);
-    final rawPublicAddress = _asString(json['publicAddress'] ?? json['address']);
+    final rawPublicAddress = _asString(
+      json['publicAddress'] ?? json['address'],
+    );
     return RecipientWallet(
       id: _asString(json['id']),
       userId: _asString(json['userId']),

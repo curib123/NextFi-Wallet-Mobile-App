@@ -1,4 +1,3 @@
-// lib/app/widgets/app_bottom_navigation_premium.dart
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -9,18 +8,6 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/theme/app_fonts.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 
-/// Ultra-premium fintech navigation with advanced morphing effects
-///
-/// Features:
-/// - Morphing pill-style selection indicator
-/// - Glassmorphism with backdrop blur
-/// - 3D-style floating center button
-/// - Liquid animations
-/// - Smart drawer placement
-/// - Haptic feedback
-/// - Performance optimized
-///
-/// Design inspired by modern banking apps like Revolut, N26, and Wise
 class AppBottomNavigationPremium extends ConsumerStatefulWidget {
   const AppBottomNavigationPremium({super.key});
 
@@ -187,7 +174,6 @@ class _AppBottomNavigationPremiumState
     );
   }
 
-  /// Navigation item with liquid animation
   Widget _buildNavItem({
     required BuildContext context,
     required IconData icon,
@@ -212,7 +198,6 @@ class _AppBottomNavigationPremiumState
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Icon with liquid bounce
               Stack(
                 clipBehavior: Clip.none,
                 alignment: Alignment.center,
@@ -237,7 +222,6 @@ class _AppBottomNavigationPremiumState
                     },
                   ),
 
-                  // Badge
                   if (hasBadge)
                     Positioned(
                       top: -8,
@@ -255,7 +239,6 @@ class _AppBottomNavigationPremiumState
 
               const SizedBox(height: 4),
 
-              // Label with slide animation
               AnimatedSlide(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOutCubic,
@@ -293,7 +276,6 @@ class _AppBottomNavigationPremiumState
     );
   }
 
-  /// 3D-style floating swap button with subtle depth
   Widget _build3DSwapButton({
     required BuildContext context,
     required bool isSelected,
@@ -358,7 +340,6 @@ class _AppBottomNavigationPremiumState
     );
   }
 
-  /// Clean drawer with subtle shadow
   Widget _buildLiquidBadge(BuildContext context, int count, Color color) {
     final colors = AppColor.of(context);
     return TweenAnimationBuilder<double>(
@@ -399,7 +380,6 @@ class _AppBottomNavigationPremiumState
     );
   }
 
-  /// Subtle pulsing dot indicator
   Widget _buildPulsingDot(BuildContext context) {
     final colors = AppColor.of(context);
     return AnimatedBuilder(

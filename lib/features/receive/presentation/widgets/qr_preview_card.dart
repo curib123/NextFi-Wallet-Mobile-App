@@ -1,10 +1,14 @@
-// lib/features/receive/view/widgets/qr_preview_card.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class QrPreviewCard extends StatelessWidget {
-  const QrPreviewCard({super.key, required this.address, required this.token, required this.onTap});
+  const QrPreviewCard({
+    super.key,
+    required this.address,
+    required this.token,
+    required this.onTap,
+  });
   final String address;
   final String token;
   final VoidCallback onTap;
@@ -37,7 +41,10 @@ class QrPreviewCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: c.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(999),
@@ -101,4 +108,3 @@ class QrPreviewCard extends StatelessWidget {
     );
   }
 }
-

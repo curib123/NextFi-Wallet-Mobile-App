@@ -6,7 +6,6 @@ import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/services/assets/asset_catalog_service.dart';
 
-/// Production-grade Asset Registry + Pricing Delta Engine
 class AssetVM with ChangeNotifier {
   AssetVM(
     this.currency, {
@@ -23,8 +22,6 @@ class AssetVM with ChangeNotifier {
     unawaited(refreshCatalog(retryUntilSuccess: true));
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   final CurrencyVM currency;
   final bool isTestnet;
   final String usdcIssuer;
@@ -36,12 +33,8 @@ class AssetVM with ChangeNotifier {
       encryptedSharedPreferences: true,
       resetOnError: true,
     ),
-    iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
-    ),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ASSETS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   final List<AssetModel> _assets = [];
   final Map<String, AssetModel> _lookup = {};
@@ -58,13 +51,18 @@ class AssetVM with ChangeNotifier {
       var attempt = 0;
       while (!_disposed) {
         try {
-          final remoteAssets = await _catalogService.fetchAssetsAndUpdateCache();
+          final remoteAssets = await _catalogService
+              .fetchAssetsAndUpdateCache();
           _applyCatalog(remoteAssets);
           return;
         } catch (_) {
           attempt += 1;
           if (!retryUntilSuccess) return;
-          final delaySeconds = attempt <= 3 ? 2 : attempt <= 6 ? 5 : 10;
+          final delaySeconds = attempt <= 3
+              ? 2
+              : attempt <= 6
+              ? 5
+              : 10;
           await Future<void>.delayed(Duration(seconds: delaySeconds));
         }
       }
@@ -79,10 +77,7 @@ class AssetVM with ChangeNotifier {
     _applyCatalog(cachedAssets, persistVisibility: false);
   }
 
-  void _applyCatalog(
-    List<AssetModel> assets, {
-    bool persistVisibility = true,
-  }) {
+  void _applyCatalog(List<AssetModel> assets, {bool persistVisibility = true}) {
     _assets
       ..clear()
       ..addAll(assets);
@@ -107,8 +102,6 @@ class AssetVM with ChangeNotifier {
     }
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   bool _disposed = false;
   bool _started = false;
 
@@ -118,7 +111,6 @@ class AssetVM with ChangeNotifier {
 
   Timer? _debounce;
 
-  /// Cached deltas
   final Map<String, Map<String, double>> _deltaCache = {};
 
   List<AssetModel> _enabledSorted = [];
@@ -133,8 +125,6 @@ class AssetVM with ChangeNotifier {
 
   String get vsCurrency => currency.fiat;
   bool get loading => currency.loading;
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ REALTIME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void startRealtimeUpdates() {
     if (_started) return;
@@ -165,14 +155,12 @@ class AssetVM with ChangeNotifier {
   void _onPriceTick() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
-    if (!_disposed) {
+      if (!_disposed) {
         _recompute();
         _safeNotify();
       }
     });
   }
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ COMPUTE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   double _pct(List<double> s) {
     if (s.length < 2) return double.nan;
@@ -208,12 +196,9 @@ class AssetVM with ChangeNotifier {
       );
     }
 
-    // Keep id/symbol/alias lookups in sync with the latest recomputed models.
     _buildLookupCache();
 
-    _enabledSorted = _assets
-        .where((a) => a.enabled)
-        .toList()
+    _enabledSorted = _assets.where((a) => a.enabled).toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   }
 
@@ -256,9 +241,7 @@ class AssetVM with ChangeNotifier {
           .toSet();
       _reconcileWalletHomeVisibility();
       _safeNotify();
-    } catch (_) {
-      // Fall back to showing all assets if local preference is unavailable.
-    }
+    } catch (_) {}
   }
 
   void _reconcileWalletHomeVisibility() {
@@ -288,7 +271,8 @@ class AssetVM with ChangeNotifier {
   }
 
   Set<String> _defaultWalletHomeVisibleIds([Set<String>? enabledIds]) {
-    final allowedIds = enabledIds ??
+    final allowedIds =
+        enabledIds ??
         _assets
             .where((asset) => asset.enabled)
             .map((asset) => asset.id)
@@ -321,12 +305,8 @@ class AssetVM with ChangeNotifier {
         value: jsonEncode(visible.toList()..sort()),
       );
       _walletHomeVisibilityLoadedFromStorage = true;
-    } catch (_) {
-      // Ignore persistence failures and keep in-memory state.
-    }
+    } catch (_) {}
   }
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   AssetModel? findAsset(String key) => _lookup[key.trim().toLowerCase()];
 
@@ -337,8 +317,7 @@ class AssetVM with ChangeNotifier {
       _enabledSorted.firstOrNull?.primaryLogo ??
       '';
 
-  String? explorerUrl(
-      String key, String kind, Map<String, String> vars) {
+  String? explorerUrl(String key, String kind, Map<String, String> vars) {
     final asset = findAsset(key);
     final tmpl = asset?.explorer[kind];
     if (tmpl == null) return null;
@@ -355,8 +334,6 @@ class AssetVM with ChangeNotifier {
     return out;
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ LIFECYCLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   void _safeNotify() {
     if (!_disposed) notifyListeners();
   }
@@ -369,4 +346,3 @@ class AssetVM with ChangeNotifier {
     super.dispose();
   }
 }
-

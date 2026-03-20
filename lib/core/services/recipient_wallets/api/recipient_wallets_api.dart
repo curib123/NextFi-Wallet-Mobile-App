@@ -44,14 +44,11 @@ class RecipientWalletsApi {
       if (item is! Map) continue;
       try {
         parsed.add(RecipientWallet.fromJson(Map<String, dynamic>.from(item)));
-      } catch (_) {
-        // Skip malformed rows so one bad item doesn't hide the whole list.
-      }
+      } catch (_) {}
     }
     return parsed;
   }
 
-  // POST /recipient-wallets
   Future<RecipientWallet> create(CreateRecipientWalletRequest req) async {
     final response = await _api.post(
       '/recipient-wallets',
@@ -64,7 +61,6 @@ class RecipientWalletsApi {
     throw Exception('Invalid response shape from POST /recipient-wallets');
   }
 
-  // GET /recipient-wallets?q=&network=&activeOnly=true
   Future<List<RecipientWallet>> list({
     String? q,
     String? network,
@@ -88,7 +84,6 @@ class RecipientWalletsApi {
     return _parseListFromResponse(response);
   }
 
-  // GET /recipient-wallets/:id
   Future<RecipientWallet> getById(String id) async {
     final response = await _api.get('/recipient-wallets/$id', auth: true);
     if (response is Map) {
@@ -97,7 +92,6 @@ class RecipientWalletsApi {
     throw Exception('Invalid response shape from GET /recipient-wallets/$id');
   }
 
-  // PATCH /recipient-wallets/:id
   Future<RecipientWallet> update({
     required String id,
     String? name,
@@ -128,7 +122,6 @@ class RecipientWalletsApi {
     throw Exception('Invalid response shape from PATCH /recipient-wallets/$id');
   }
 
-  // PATCH /recipient-wallets/:id/toggle
   Future<RecipientWallet> toggleActive(String id) async {
     final response = await _api.patch(
       '/recipient-wallets/$id/toggle',
@@ -143,7 +136,6 @@ class RecipientWalletsApi {
     );
   }
 
-  // DELETE /recipient-wallets/:id
   Future<bool> delete(String id) async {
     final response = await _api.delete('/recipient-wallets/$id', auth: true);
     if (response == null) return true;

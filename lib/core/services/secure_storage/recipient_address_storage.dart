@@ -1,13 +1,9 @@
-// lib/features/wallet_home/data/recipient_address_storage.dart
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/features/contact/data/models/recipient_address_model.dart';
 
-/// Secure storage boundary for recipient addresses.
-/// Keeps platform options + key details out of the VM.
 class RecipientAddressStorage {
   static const String _storageKey = 'recipient_addresses_v1';
 
-  // Strong platform options (consistent with your app)
   static const AndroidOptions _android = AndroidOptions(
     encryptedSharedPreferences: true,
     resetOnError: true,
@@ -19,9 +15,8 @@ class RecipientAddressStorage {
   final FlutterSecureStorage _storage;
 
   const RecipientAddressStorage({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
-  /// Read all saved recipient addresses. Returns [] if nothing stored.
   Future<List<RecipientAddressModel>> readAll() async {
     final raw = await _storage.read(
       key: _storageKey,
@@ -31,7 +26,6 @@ class RecipientAddressStorage {
     return RecipientAddressModel.decodeList(raw);
   }
 
-  /// Overwrite all recipient addresses atomically.
   Future<void> writeAll(List<RecipientAddressModel> items) async {
     final payload = RecipientAddressModel.encodeList(items);
     await _storage.write(
@@ -42,13 +36,7 @@ class RecipientAddressStorage {
     );
   }
 
-  /// Delete the key entirely.
   Future<void> deleteAll() async {
-    await _storage.delete(
-      key: _storageKey,
-      aOptions: _android,
-      iOptions: _ios,
-    );
+    await _storage.delete(key: _storageKey, aOptions: _android, iOptions: _ios);
   }
 }
-

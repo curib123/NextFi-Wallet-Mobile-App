@@ -36,10 +36,6 @@ class ChatEnvelopeCodec {
     );
   }
 
-  // Compatibility envelope codec:
-  // - Keeps payload encrypted-shape for backend protocol.
-  // - Ciphertext currently uses base64(utf8(text)) until full E2EE key exchange
-  //   is wired in app.
   static SendEncryptedChatMessageRequest encodeText({
     required String plainText,
     required String senderKeyId,

@@ -52,17 +52,12 @@ class MerchantProfileService {
         final v = data[key];
         if (v is Map<String, dynamic>) return v;
       }
-      // Not a pure envelope — return as-is
       final envelopeOnly = {'data', 'success', 'message', 'error', 'meta'};
       if (!data.keys.every((k) => envelopeOnly.contains(k))) return data;
     }
     return null;
   }
 
-  // ── User routes ─────────────────────────────────────────────────────────────
-
-  /// GET /merchant-profiles/me
-  /// Returns null if the user has not submitted a merchant application yet.
   Future<MerchantProfileModel?> getMe() async {
     try {
       final res = await _client.get(
@@ -80,8 +75,6 @@ class MerchantProfileService {
     return null;
   }
 
-  /// GET /merchant-profiles/me/tier-progress
-  /// Returns null if user is not merchant yet or endpoint is unavailable for current state.
   Future<MerchantTierProgressModel?> getTierProgress() async {
     try {
       final res = await _client.get(
@@ -99,7 +92,6 @@ class MerchantProfileService {
     return null;
   }
 
-  /// POST /merchant-profiles/request  — submit or re-submit merchant application.
   Future<MerchantProfileModel> request(
     RequestMerchantProfileRequest req,
   ) async {
@@ -119,7 +111,6 @@ class MerchantProfileService {
     );
   }
 
-  /// PATCH /merchant-profiles/me  — update profile details (APPROVED merchants only).
   Future<MerchantProfileModel> updateMe(
     UpdateMerchantProfileRequest req,
   ) async {
@@ -139,7 +130,6 @@ class MerchantProfileService {
     );
   }
 
-  /// PATCH /merchant-profiles/me/availability  — set availability schedule.
   Future<MerchantProfileModel> updateAvailability(
     UpdateMerchantAvailabilityRequest req,
   ) async {
@@ -159,8 +149,6 @@ class MerchantProfileService {
     );
   }
 
-  /// POST /merchant-profiles/me/business-docs  — upload business documents.
-  /// At least one of [businessDocument] or [authorizationLetter] is required.
   Future<MerchantProfileModel> uploadBusinessDocs({
     File? businessDocument,
     File? authorizationLetter,
@@ -209,7 +197,6 @@ class MerchantProfileService {
     );
   }
 
-  /// GET /merchant-profiles/public/:userId  — public merchant profile (APPROVED only).
   Future<MerchantProfileModel?> getPublic(String userId) async {
     try {
       final res = await _client.get(

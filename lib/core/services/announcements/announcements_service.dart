@@ -55,7 +55,7 @@ class AnnouncementItem {
         default:
           return AnnouncementType.announcement;
       }
-    } 
+    }
 
     return AnnouncementItem(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
@@ -66,14 +66,21 @@ class AnnouncementItem {
       imageUrl: _readOptionalText(json, const ['imageUrl', 'image']),
       typeLabel: _readOptionalText(json, const ['typeLabel', 'label']),
       actionLabel: json['actionLabel']?.toString().trim(),
-      dismissLabel: _readOptionalText(json, const ['dismissLabel', 'secondaryActionLabel']),
+      dismissLabel: _readOptionalText(json, const [
+        'dismissLabel',
+        'secondaryActionLabel',
+      ]),
       actionUrl: json['actionUrl']?.toString().trim(),
       minAppVersion: json['minAppVersion']?.toString().trim(),
       requiresUpdate: json['requiresUpdate'] == true,
       isForceUpdate:
           json['isForceUpdate'] == true || json['requiresForceUpdate'] == true,
       acknowledged: json['acknowledged'] == true,
-      updatedAt: _readDateTime(json, const ['updatedAt', 'createdAt', 'startsAt']),
+      updatedAt: _readDateTime(json, const [
+        'updatedAt',
+        'createdAt',
+        'startsAt',
+      ]),
     );
   }
 
@@ -88,10 +95,7 @@ class AnnouncementItem {
     return null;
   }
 
-  static DateTime? _readDateTime(
-    Map<String, dynamic> json,
-    List<String> keys,
-  ) {
+  static DateTime? _readDateTime(Map<String, dynamic> json, List<String> keys) {
     for (final key in keys) {
       final raw = json[key]?.toString().trim();
       if (raw == null || raw.isEmpty) continue;
@@ -109,7 +113,7 @@ class VersionCheckResult {
     this.requiredMinVersion,
     this.updates = const [],
   });
- 
+
   final bool requiresUpdate;
   final bool requiresForceUpdate;
   final String? requiredMinVersion;
@@ -202,7 +206,9 @@ class AnnouncementsService {
   }
 
   Future<Map<String, String>> _headers({required bool auth}) async {
-    final headers = <String, String>{HttpHeaders.acceptHeader: 'application/json'};
+    final headers = <String, String>{
+      HttpHeaders.acceptHeader: 'application/json',
+    };
     if (auth) {
       final token = await _tokenStorage.accessToken;
       if (token != null && token.isNotEmpty) {
@@ -213,13 +219,17 @@ class AnnouncementsService {
   }
 
   Map<String, dynamic> _decodeMap(http.Response res) {
-    final dynamic decoded = res.body.trim().isEmpty ? <String, dynamic>{} : jsonDecode(res.body);
+    final dynamic decoded = res.body.trim().isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(res.body);
     final map = decoded is Map<String, dynamic>
         ? decoded
         : <String, dynamic>{'data': decoded};
 
     if (res.statusCode >= 200 && res.statusCode < 300) return map;
-    throw Exception(map['message']?.toString() ?? 'Announcements request failed');
+    throw Exception(
+      map['message']?.toString() ?? 'Announcements request failed',
+    );
   }
 
   Map<String, dynamic> _unwrapEnvelope(Map<String, dynamic> raw) {

@@ -1,5 +1,3 @@
-// ignore_for_file: invalid_annotation_target
-
 enum TrustStatus {
   basic,
   reviewing,
@@ -60,7 +58,6 @@ enum GovernmentIdType {
     }
   }
 
-  /// API value sent to the server.
   String get apiValue {
     switch (this) {
       case GovernmentIdType.passport:
@@ -190,9 +187,7 @@ class VerificationModel {
     required this.id,
     required this.userId,
     required this.status,
-    // ── Contact ──────────────────────────────────────
     this.phoneNumber,
-    // ── Identity snapshot ────────────────────────────
     this.fullLegalName,
     this.dateOfBirth,
     this.nationality,
@@ -203,38 +198,29 @@ class VerificationModel {
     this.stateOrProvince,
     this.postalCode,
     this.issuingCountry,
-    // ── Government ID ────────────────────────────────
     this.governmentIdType,
     this.governmentIdNumber,
     this.governmentIdExpiry,
-    // ── Document URLs ────────────────────────────────
     this.selfieUrl,
     this.governmentIdFrontUrl,
     this.governmentIdBackUrl,
-    // ── Verification scoring ─────────────────────────
     this.liveCapture,
     this.faceMatchScore,
     this.livenessScore,
     this.riskScore,
     this.manualReviewRequired = false,
-    // ── Payment account ──────────────────────────────
     this.paymentAccountId,
-    // ── Review lifecycle ─────────────────────────────
     this.submittedAt,
     this.lastResubmittedAt,
     this.reviewedAt,
     this.approvedAt,
     this.rejectedAt,
     this.rejectReason,
-    // ── Suspension ───────────────────────────────────
     this.suspendedAt,
     this.suspendReason,
-    // ── Consent ──────────────────────────────────────
     this.consentAcceptedAt,
     this.consentVersion,
-    // ── Audit ────────────────────────────────────────
     this.submittedIp,
-    // ── Timestamps ───────────────────────────────────
     this.createdAt,
     this.updatedAt,
     this.resubmissionGuide,
@@ -245,10 +231,8 @@ class VerificationModel {
   final String userId;
   final TrustStatus status;
 
-  // ── Contact ──────────────────────────────────────────────
   final String? phoneNumber;
 
-  // ── Identity snapshot ────────────────────────────────────
   final String? fullLegalName;
   final DateTime? dateOfBirth;
   final String? nationality;
@@ -260,27 +244,22 @@ class VerificationModel {
   final String? postalCode;
   final String? issuingCountry;
 
-  // ── Government ID ────────────────────────────────────────
   final GovernmentIdType? governmentIdType;
   final String? governmentIdNumber;
   final DateTime? governmentIdExpiry;
 
-  // ── Document URLs ────────────────────────────────────────
   final String? selfieUrl;
   final String? governmentIdFrontUrl;
   final String? governmentIdBackUrl;
 
-  // ── Verification scoring ─────────────────────────────────
   final bool? liveCapture;
   final double? faceMatchScore;
   final double? livenessScore;
   final double? riskScore;
   final bool manualReviewRequired;
 
-  // ── Payment account ──────────────────────────────────────
   final String? paymentAccountId;
 
-  // ── Review lifecycle ─────────────────────────────────────
   final DateTime? submittedAt;
   final DateTime? lastResubmittedAt;
   final DateTime? reviewedAt;
@@ -288,26 +267,19 @@ class VerificationModel {
   final DateTime? rejectedAt;
   final String? rejectReason;
 
-  // ── Suspension ───────────────────────────────────────────
   final DateTime? suspendedAt;
   final String? suspendReason;
 
-  // ── Consent ──────────────────────────────────────────────
   final DateTime? consentAcceptedAt;
   final String? consentVersion;
 
-  // ── Audit ────────────────────────────────────────────────
   final String? submittedIp;
 
-  // ── Timestamps ───────────────────────────────────────────
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final VerificationResubmissionGuide? resubmissionGuide;
   final List<VerificationReviewLog> reviewLogs;
 
-  // ── Derived helpers ──────────────────────────────────────
-
-  /// True once all three document images and phone number have been uploaded.
   bool get hasSubmittedRequiredDocuments {
     bool text(String? v) => v != null && v.trim().isNotEmpty;
     return text(selfieUrl) &&
@@ -316,13 +288,11 @@ class VerificationModel {
         text(phoneNumber);
   }
 
-  /// True if the identity snapshot is at least partially filled.
   bool get hasIdentitySnapshot {
     bool text(String? v) => v != null && v.trim().isNotEmpty;
     return text(fullLegalName) || dateOfBirth != null || text(nationality);
   }
 
-  /// True if government ID details have been provided.
   bool get hasGovernmentIdDetails {
     bool text(String? v) => v != null && v.trim().isNotEmpty;
     return governmentIdType != null ||

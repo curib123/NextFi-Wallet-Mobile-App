@@ -42,8 +42,6 @@ class ProfileModel {
     );
   }
 
-  /// Profile is considered complete for the verification flow once the user
-  /// has chosen a username (minimum required identity on this platform).
   bool get isVerificationIdentityComplete {
     bool hasValue(String? value) => value != null && value.trim().isNotEmpty;
     return hasValue(username);

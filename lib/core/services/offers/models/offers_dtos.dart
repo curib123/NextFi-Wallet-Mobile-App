@@ -71,7 +71,6 @@ List<String> _cleanPaymentMethodIds(List<String> ids) {
   return cleaned;
 }
 
-/// Shared filters for /offers, /offers/me and /offers/admin/list.
 class OffersListQuery {
   final String? q;
   final OfferType? type;
@@ -115,10 +114,12 @@ class OffersListQuery {
     if (q != null && q!.trim().isNotEmpty) 'q': q!.trim(),
     if (type != null) 'type': _offerTypeWire(type!),
     if (status != null) 'status': _offerStatusWire(status!),
-    if (asset != null && asset!.trim().isNotEmpty) 'asset': _normalizeUpper(asset!),
+    if (asset != null && asset!.trim().isNotEmpty)
+      'asset': _normalizeUpper(asset!),
     if (fiatCurrency != null && fiatCurrency!.trim().isNotEmpty)
       'fiatCurrency': _normalizeUpper(fiatCurrency!),
-    if (sellerId != null && sellerId!.trim().isNotEmpty) 'sellerId': sellerId!.trim(),
+    if (sellerId != null && sellerId!.trim().isNotEmpty)
+      'sellerId': sellerId!.trim(),
     if (paymentMethodId != null && paymentMethodId!.trim().isNotEmpty)
       'paymentMethodId': paymentMethodId!.trim(),
     if (amount != null && amount!.trim().isNotEmpty) 'amount': amount!.trim(),

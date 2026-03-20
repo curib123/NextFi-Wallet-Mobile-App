@@ -1,14 +1,13 @@
-// lib/features/wallet_creation/view/widgets/shimmer_text.dart
 import 'package:flutter/material.dart';
 import 'package:vector_math/vector_math_64.dart' as vm;
 
 class ShimmerText extends StatefulWidget {
   const ShimmerText(
-      this.text, {
-        super.key,
-        required this.baseColor,
-        required this.highlightColor,
-      });
+    this.text, {
+    super.key,
+    required this.baseColor,
+    required this.highlightColor,
+  });
 
   final String text;
   final Color baseColor;
@@ -20,9 +19,10 @@ class ShimmerText extends StatefulWidget {
 
 class _ShimmerTextState extends State<ShimmerText>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl =
-  AnimationController(vsync: this, duration: const Duration(seconds: 3))
-    ..repeat();
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 3),
+  )..repeat();
 
   @override
   void dispose() {

@@ -91,10 +91,9 @@ class ReceiveViewState {
       isAliasAvailable: identical(isAliasAvailable, _sentinel)
           ? this.isAliasAvailable
           : isAliasAvailable as bool?,
-      aliasAvailabilityMessage:
-          identical(aliasAvailabilityMessage, _sentinel)
-              ? this.aliasAvailabilityMessage
-              : aliasAvailabilityMessage as String?,
+      aliasAvailabilityMessage: identical(aliasAvailabilityMessage, _sentinel)
+          ? this.aliasAvailabilityMessage
+          : aliasAvailabilityMessage as String?,
       federationDomain: federationDomain ?? this.federationDomain,
       editingFederationId: identical(editingFederationId, _sentinel)
           ? this.editingFederationId

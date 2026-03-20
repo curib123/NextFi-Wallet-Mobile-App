@@ -3,11 +3,14 @@ import 'package:next_fi/core/services/recipient_wallets/models/recipient_wallet_
 import 'package:next_fi/core/services/recipient_wallets/recipient_wallets_core.dart';
 
 class ContactService {
-  ContactService([RecipientWalletsCore? api]) : _api = api ?? RecipientWalletsCore();
+  ContactService([RecipientWalletsCore? api])
+    : _api = api ?? RecipientWalletsCore();
 
   final RecipientWalletsCore _api;
 
-  Future<List<RecipientAddressModel>> fetchAll({bool activeOnly = false}) async {
+  Future<List<RecipientAddressModel>> fetchAll({
+    bool activeOnly = false,
+  }) async {
     final recipients = await _api.getAllRecipients(activeOnly: activeOnly);
     return recipients.map(_toLocal).toList();
   }

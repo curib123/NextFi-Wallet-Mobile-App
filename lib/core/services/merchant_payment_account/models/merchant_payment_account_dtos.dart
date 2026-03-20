@@ -1,4 +1,3 @@
-/// Query parameters for GET /merchant-payment-accounts
 class MerchantPaymentAccountListQuery {
   final String? q;
   final String? paymentMethodId;
@@ -6,13 +5,10 @@ class MerchantPaymentAccountListQuery {
   final int? page;
   final int? limit;
 
-  /// Filter by seller/merchant user ID — buyers use this to find where to send fiat.
   final String? sellerId;
 
-  /// Compatibility filter: some APIs use `userId` instead of `sellerId`.
   final String? userId;
 
-  /// Compatibility filter: some APIs use merchant profile id.
   final String? merchantProfileId;
 
   const MerchantPaymentAccountListQuery({
@@ -41,9 +37,6 @@ class MerchantPaymentAccountListQuery {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// POST /merchant-payment-accounts
 class CreateMerchantPaymentAccountRequest {
   final String paymentMethodId;
   final String accountName;
@@ -77,9 +70,6 @@ class CreateMerchantPaymentAccountRequest {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// PATCH /merchant-payment-accounts/:id
 class UpdateMerchantPaymentAccountRequest {
   final String? paymentMethodId;
   final String? accountName;

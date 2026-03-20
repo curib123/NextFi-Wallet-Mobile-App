@@ -1,4 +1,3 @@
-// lib/features/seed_phrases/view/seed_phrase_screen.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
@@ -263,7 +262,6 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
   ) {
     return Column(
       children: [
-        // Action bar (only show when revealed)
         if (!s.obscured) ...[
           Row(
             children: [
@@ -292,7 +290,6 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
           ),
           const SizedBox(height: 16),
         ],
-        // Phrase card with grid
         PhraseCard(
           words: s.words,
           obscured: s.obscured,
@@ -383,7 +380,6 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
 
     return Column(
       children: [
-        // Primary action
         SizedBox(
           width: double.infinity,
           height: 54,
@@ -422,7 +418,6 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
           ),
         ),
         const SizedBox(height: 12),
-        // Secondary action
         SizedBox(
           width: double.infinity,
           height: 54,

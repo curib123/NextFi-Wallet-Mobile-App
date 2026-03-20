@@ -7,10 +7,9 @@ final topBarProfileServiceProvider = Provider<TopBarProfileService>(
 );
 
 final topBarProfileControllerProvider =
-    NotifierProvider.autoDispose<
-      TopBarProfileController,
-      TopBarProfileState
-    >(TopBarProfileController.new);
+    NotifierProvider.autoDispose<TopBarProfileController, TopBarProfileState>(
+      TopBarProfileController.new,
+    );
 
 class TopBarProfileController extends Notifier<TopBarProfileState> {
   @override

@@ -1,4 +1,3 @@
-// lib/features/import_wallet/view/widgets/word_badge.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
@@ -38,11 +37,7 @@ class WordBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (count == 12 || count == 24)
-            Icon(
-              Icons.check_circle_rounded,
-              size: 14,
-              color: primaryColor,
-            ),
+            Icon(Icons.check_circle_rounded, size: 14, color: primaryColor),
           if (count == 12 || count == 24) const SizedBox(width: 4),
           Text(
             label,

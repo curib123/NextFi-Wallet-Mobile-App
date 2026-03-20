@@ -87,8 +87,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (has != _inputHasText) setState(() => _inputHasText = has);
   }
 
-  // â”€â”€ service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<void> _bootstrap() async {
     setState(() {
       _loading = true;
@@ -266,7 +264,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       });
       _scrollToBottom();
     } catch (e) {
-      // Keep optimistic bubble visible; clear pending marker only for this send.
       if (pendingClientId != null && pendingClientId.isNotEmpty) {
         setState(() => _pendingClientMessageIds.remove(pendingClientId));
       }
@@ -319,14 +316,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _showSnack(String message) {
-    showFloatingSnackBar(
-      context,
-      message: message,
-      type: SnackBarType.info,
-    );
+    showFloatingSnackBar(context, message: message, type: SnackBarType.info);
   }
-
-  // â”€â”€ message grouping helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   bool _isSameSenderAsPrev(int index) {
     if (index == 0) return false;
@@ -373,8 +364,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     }
   }
-
-  // â”€â”€ string helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   String get _friendTitle {
     final passedUsername = (widget.username ?? '').trim();
@@ -459,8 +448,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     return DateFormat('MMMM d, y').format(local);
   }
-
-  // â”€â”€ build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @override
   Widget build(BuildContext context) {
@@ -621,9 +608,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _buildContent(AppColor c) {
     return Column(
       children: [
-        // Connection status banner â€” only when not ready
         if (!_socketStatus.ready) _buildStatusBanner(c),
-        // Socket error banner
         if (_socketError != null && _socketError!.trim().isNotEmpty)
           Container(
             width: double.infinity,
@@ -635,15 +620,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               textAlign: TextAlign.center,
             ),
           ),
-        // E2EE notice (only when ready and no messages yet)
         if (_socketStatus.ready && _messages.isEmpty) _buildE2ENotice(c),
-        // Messages
         Expanded(
           child: _messages.isEmpty
               ? _buildEmptyMessages(c)
               : _buildMessageList(c),
         ),
-        // Input bar
         _buildInputBar(c),
       ],
     );
@@ -768,12 +750,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final showDate = m.createdAt != null && _showDateHeader(i);
     final prevSame = _isSameSenderAsPrev(i);
     final nextSame = _isSameSenderAsNext(i);
-    // Avatar shown for the last received message in a consecutive group
     final showAvatar = !mine && !nextSame;
 
     return Column(
       children: [
-        // Date separator
         if (showDate)
           Padding(
             padding: EdgeInsets.only(top: i == 0 ? 0 : 16, bottom: 12),
@@ -798,7 +778,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
           ),
-        // Message row
         Padding(
           padding: EdgeInsets.only(bottom: nextSame ? 2 : 8),
           child: Row(
@@ -807,7 +786,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ? MainAxisAlignment.end
                 : MainAxisAlignment.start,
             children: [
-              // Avatar slot (received only)
               if (!mine) ...[
                 SizedBox(
                   width: 30,
@@ -821,7 +799,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
                 const SizedBox(width: 6),
               ],
-              // Bubble
               Flexible(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
@@ -858,7 +835,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           ),
                         ),
                       ),
-                      // Timestamp + status (only on last in group)
                       if (!nextSame) ...[
                         const SizedBox(height: 3),
                         Row(
@@ -890,7 +866,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
                 ),
               ),
-              // Right spacer for received messages
               if (!mine) const SizedBox(width: 40),
             ],
           ),
@@ -904,14 +879,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: c.surface,
-        border: Border(top: BorderSide(color: c.border.withValues(alpha: 0.15))),
+        border: Border(
+          top: BorderSide(color: c.border.withValues(alpha: 0.15)),
+        ),
       ),
       child: SafeArea(
         top: false,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // Text field
             Expanded(
               child: Container(
                 constraints: const BoxConstraints(minHeight: 44),
@@ -945,7 +921,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         ),
                       ),
                     ),
-                    // Lock icon for E2EE indicator
                     Icon(
                       Icons.lock_outline_rounded,
                       size: 13,
@@ -956,7 +931,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
             const SizedBox(width: 8),
-            // Send button
             AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
@@ -1005,5 +979,3 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 }
-
-

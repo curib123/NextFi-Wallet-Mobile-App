@@ -60,17 +60,16 @@ class _AssetRemoteImageState extends State<AssetRemoteImage> {
 
       try {
         final response = await http.head(Uri.parse(url));
-        final contentType =
-            (response.headers['content-type'] ?? '').toLowerCase().trim();
+        final contentType = (response.headers['content-type'] ?? '')
+            .toLowerCase()
+            .trim();
         if (contentType.contains('image/svg+xml')) {
           return true;
         }
         if (contentType.startsWith('image/')) {
           return false;
         }
-      } catch (_) {
-        // Fall back to URL hints below.
-      }
+      } catch (_) {}
 
       return _looksLikeSvgByUrl(url);
     });

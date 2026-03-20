@@ -8,10 +8,10 @@ final scannerGalleryServiceProvider = Provider<ScannerGalleryService>(
   (ref) => ScannerGalleryService(),
 );
 
-final scannerControllerProvider = NotifierProvider.autoDispose<
-  ScannerController,
-  ScannerState
->(ScannerController.new);
+final scannerControllerProvider =
+    NotifierProvider.autoDispose<ScannerController, ScannerState>(
+      ScannerController.new,
+    );
 
 class ScannerController extends Notifier<ScannerState>
     with WidgetsBindingObserver {
@@ -83,10 +83,7 @@ class ScannerController extends Notifier<ScannerState>
   void consumeResult(String rawValue) {
     final trimmed = rawValue.trim();
     if (state.isBusy || trimmed.isEmpty) return;
-    state = state.copyWith(
-      isBusy: true,
-      lastRawValue: trimmed,
-    );
+    state = state.copyWith(isBusy: true, lastRawValue: trimmed);
     pause();
   }
 
@@ -122,9 +119,7 @@ class ScannerController extends Notifier<ScannerState>
     try {
       await _controller.stop();
       state = state.copyWith(status: ScannerStatus.paused);
-    } catch (_) {
-      // Ignore pause errors.
-    }
+    } catch (_) {}
   }
 
   Future<void> retryPermission() async {

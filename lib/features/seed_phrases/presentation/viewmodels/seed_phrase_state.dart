@@ -1,4 +1,3 @@
-// lib/features/seed_phrase/model/seed_phrase_state.dart
 class SeedPhraseState {
   final String mnemonic;
   final List<String> words;
@@ -28,7 +27,7 @@ class SeedPhraseState {
     bool? obscured,
     bool? ack1,
     bool? ack2,
-    String? error, // pass '' to clear
+    String? error,
   }) {
     return SeedPhraseState(
       mnemonic: mnemonic ?? this.mnemonic,

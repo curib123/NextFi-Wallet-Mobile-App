@@ -15,15 +15,16 @@ class TradeInboxSummary {
   final int merchantActionCount;
 }
 
-final tradeInboxSummaryProvider =
-    FutureProvider.autoDispose<TradeInboxSummary>((Ref ref) async {
-      final trades = await TradesCoreService.I.list();
-      return TradeInboxSummary(
-        trades: trades,
-        activeTradeCount: trades.where((trade) => trade.status.isActive).length,
-        merchantActionCount: trades.where(_requiresMerchantAction).length,
-      );
-    });
+final tradeInboxSummaryProvider = FutureProvider.autoDispose<TradeInboxSummary>(
+  (Ref ref) async {
+    final trades = await TradesCoreService.I.list();
+    return TradeInboxSummary(
+      trades: trades,
+      activeTradeCount: trades.where((trade) => trade.status.isActive).length,
+      merchantActionCount: trades.where(_requiresMerchantAction).length,
+    );
+  },
+);
 
 bool _requiresMerchantAction(TradeModel trade) {
   switch (trade.status) {

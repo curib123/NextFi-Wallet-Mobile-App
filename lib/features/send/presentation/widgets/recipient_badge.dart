@@ -1,4 +1,3 @@
-// lib/features/send/view/widgets/recipient_badge.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -22,10 +21,7 @@ class RecipientBadge extends StatelessWidget {
     return '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
   }
 
-  /// Returns a solid, non-opacity tinted background color derived from the
-  /// brand color but mixed toward the surface so it stays readable.
   Color _solidTint(Color brand, bool isDark, AppColor c) {
-    // Blend brand toward white (light) or dark surface
     final base = isDark ? c.textPrimary : c.surface;
     return Color.lerp(base, brand, isDark ? 0.14 : 0.10)!;
   }
@@ -65,7 +61,6 @@ class RecipientBadge extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // ── Avatar ────────────────────────────────────────────────────
           Container(
             width: 42,
             height: 42,
@@ -87,7 +82,6 @@ class RecipientBadge extends StatelessWidget {
           ),
           const SizedBox(width: 13),
 
-          // ── Name + address ────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,7 +116,6 @@ class RecipientBadge extends StatelessWidget {
           ),
           const SizedBox(width: 10),
 
-          // ── Edit button ───────────────────────────────────────────────
           GestureDetector(
             onTap: onEdit,
             behavior: HitTestBehavior.opaque,
@@ -144,4 +137,3 @@ class RecipientBadge extends StatelessWidget {
     );
   }
 }
-

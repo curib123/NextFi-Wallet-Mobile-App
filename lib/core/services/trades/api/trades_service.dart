@@ -208,8 +208,6 @@ class TradesService {
     return '';
   }
 
-  // ── User routes ─────────────────────────────────────────────────────────────
-
   Future<TradeModel> create(CreateTradeRequest req) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.create()),
@@ -324,11 +322,6 @@ class TradesService {
     throw TradeApiException(res.statusCode, 'Unexpected response for cancel');
   }
 
-  // ── Crypto escrow operations ─────────────────────────────────────────────────
-
-  /// Lock crypto into escrow (Step B in both SELL and BUY flows)
-  /// - SELL offer: merchant locks crypto
-  /// - BUY offer: buyer locks crypto
   Future<TradeModel> lockCrypto(
     String id, {
     required String claimableBalanceId,
@@ -356,9 +349,6 @@ class TradesService {
     );
   }
 
-  /// Claim crypto from escrow (Step E in both flows)
-  /// - SELL offer: buyer claims crypto
-  /// - BUY offer: merchant claims crypto
   Future<TradeModel> claimCrypto(
     String id, {
     required String claimTxHash,
@@ -380,7 +370,6 @@ class TradesService {
     );
   }
 
-  /// Refund crypto from expired escrow (only original locker can call)
   Future<TradeModel> refundCrypto(
     String id, {
     required String refundTxHash,
@@ -403,8 +392,6 @@ class TradesService {
       'Unexpected response for refund-crypto',
     );
   }
-
-  // ── Mark Fiat Sent with proof ─────────────────────────────────────────────
 
   Future<TradeModel> markFiatSentWithProof(
     String id, {
@@ -430,8 +417,6 @@ class TradesService {
       'Unexpected response for mark-fiat-sent',
     );
   }
-
-  // ── Dispute ───────────────────────────────────────────────────────────────
 
   Future<TradeModel> openDispute(
     String id, {
@@ -462,8 +447,6 @@ class TradesService {
       'Unexpected response for open-dispute',
     );
   }
-
-  // ── Messages ─────────────────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> getTradeMessages(String id) async {
     final res = await _client.get(
@@ -497,8 +480,6 @@ class TradesService {
     );
     TradesHttp.ensureOk(res);
   }
-
-  // ── Payment proof upload (multipart) ─────────────────────────────────────
 
   Future<String?> uploadPaymentProof(
     String id, {

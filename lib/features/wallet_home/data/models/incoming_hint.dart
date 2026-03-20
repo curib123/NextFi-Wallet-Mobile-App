@@ -1,4 +1,3 @@
-// lib/features/wallet_home/model/incoming_hint.dart
 class IncomingHint {
   final String id;
   final String from;

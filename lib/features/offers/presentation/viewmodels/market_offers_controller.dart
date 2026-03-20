@@ -297,4 +297,3 @@ class MarketOffersController extends Notifier<MarketOffersState> {
     return null;
   }
 }
-

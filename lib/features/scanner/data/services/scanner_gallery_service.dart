@@ -2,10 +2,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class ScannerGalleryResult {
-  const ScannerGalleryResult({
-    this.rawValue,
-    this.errorMessage,
-  });
+  const ScannerGalleryResult({this.rawValue, this.errorMessage});
 
   final String? rawValue;
   final String? errorMessage;
@@ -39,9 +36,7 @@ class ScannerGalleryService {
 
       return ScannerGalleryResult(rawValue: rawValue);
     } catch (e) {
-      return ScannerGalleryResult(
-        errorMessage: 'Failed to read QR image: $e',
-      );
+      return ScannerGalleryResult(errorMessage: 'Failed to read QR image: $e');
     }
   }
 }

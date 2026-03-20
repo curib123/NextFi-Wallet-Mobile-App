@@ -269,7 +269,6 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    // Social layering: Handle empty or null responses gracefully
     if (res.body.isEmpty) {
       return ChatFriendRequestModel(
         id: '',
@@ -284,7 +283,6 @@ class ChatService {
       return ChatFriendRequestModel.fromJson(map);
     }
 
-    // Return placeholder on empty response
     return ChatFriendRequestModel(
       id: '',
       senderId: '',
@@ -340,7 +338,6 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    // Social layering: Handle empty or null responses gracefully
     if (res.body.isEmpty) {
       return ChatFriendRequestModel(
         id: requestId,
@@ -374,7 +371,6 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    // Social layering: Handle empty or null responses gracefully
     if (res.body.isEmpty) {
       final status = req.action == 'ACCEPTED'
           ? ChatFriendRequestStatus.accepted
@@ -410,7 +406,6 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    // Social layering: Handle empty or null responses gracefully
     if (res.body.isEmpty) {
       return ChatFriendRequestModel(
         id: requestId,
@@ -563,7 +558,6 @@ class ChatService {
       return ChatDirectMessageModel.fromJson(map);
     }
 
-    // Fallback for APIs returning success envelopes without message payload.
     return ChatDirectMessageModel(
       id: req.clientMessageId,
       threadId: threadId,
@@ -588,7 +582,6 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    // Social layering: Handle empty or null responses gracefully
     if (res.body.isEmpty) {
       return ChatDirectThreadModel(
         id: req.friendId,
@@ -603,7 +596,6 @@ class ChatService {
       return ChatDirectThreadModel.fromJson(map);
     }
 
-    // Return fallback thread on empty response
     return ChatDirectThreadModel(
       id: req.friendId,
       friendUserId: req.friendId,
@@ -619,7 +611,6 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    // Social layering: Handle empty or null responses gracefully
     if (res.body.isEmpty) {
       return ChatDirectThreadModel(
         id: threadId,
@@ -634,7 +625,6 @@ class ChatService {
       return ChatDirectThreadModel.fromJson(map);
     }
 
-    // Return fallback thread on empty response
     return ChatDirectThreadModel(
       id: threadId,
       friendUserId: '',
@@ -644,8 +634,6 @@ class ChatService {
   }
 
   Future<ChatDirectThreadModel> getThreadWithFriend(String friendId) async {
-    // Keep backward compatibility while preventing invalid empty-thread
-    // objects from reaching UI. This endpoint currently opens or returns.
     return openThreadWithFriend(friendId);
   }
 
@@ -656,7 +644,6 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    // Social layering: Handle empty or null responses gracefully
     if (res.body.isEmpty) {
       return ChatDirectMessageModel(
         id: messageId,
@@ -675,7 +662,6 @@ class ChatService {
       return ChatDirectMessageModel.fromJson(map);
     }
 
-    // Return fallback message on empty response
     return ChatDirectMessageModel(
       id: messageId,
       threadId: '',

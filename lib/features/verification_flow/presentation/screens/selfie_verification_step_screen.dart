@@ -33,16 +33,13 @@ class _SelfieVerificationStepScreenState
 
   final ImagePicker _picker = ImagePicker();
 
-  // â”€â”€ Contact â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final TextEditingController _phoneCtrl = TextEditingController();
 
-  // â”€â”€ Identity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final TextEditingController _fullLegalNameCtrl = TextEditingController();
   final TextEditingController _nationalityCtrl = TextEditingController();
   CountryModel? _selectedCountryOfResidence;
   DateTime? _dateOfBirth;
 
-  // â”€â”€ Address â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final TextEditingController _addressLine1Ctrl = TextEditingController();
   final TextEditingController _addressLine2Ctrl = TextEditingController();
   final TextEditingController _cityCtrl = TextEditingController();
@@ -50,12 +47,10 @@ class _SelfieVerificationStepScreenState
   final TextEditingController _postalCodeCtrl = TextEditingController();
   CountryModel? _selectedIssuingCountry;
 
-  // â”€â”€ Government ID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   GovernmentIdType? _governmentIdType;
   final TextEditingController _governmentIdNumberCtrl = TextEditingController();
   DateTime? _governmentIdExpiry;
 
-  // â”€â”€ Files â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   File? _selfie;
   File? _idFront;
   File? _idBack;
@@ -193,7 +188,6 @@ class _SelfieVerificationStepScreenState
       _assignSlot(slot, recoveredFile);
       _showSnack('Recovered your last camera capture.');
     } catch (_) {
-      // Best-effort recovery only.
     } finally {
       _recoveringLostData = false;
     }
@@ -218,7 +212,6 @@ class _SelfieVerificationStepScreenState
     try {
       return await pick().timeout(const Duration(seconds: 45));
     } on PlatformException {
-      // Some devices fail with explicit camera selection; retry with defaults.
       return pick(
         device: CameraDevice.rear,
       ).timeout(const Duration(seconds: 45));
@@ -471,7 +464,6 @@ class _SelfieVerificationStepScreenState
           governmentIdFront: _idFront!,
           governmentIdBack: _idBack!,
           paymentAccountId: _activePaymentAccountId,
-          // Identity
           fullLegalName: _fullLegalNameCtrl.text.trim().isEmpty
               ? null
               : _fullLegalNameCtrl.text.trim(),
@@ -480,7 +472,6 @@ class _SelfieVerificationStepScreenState
               ? null
               : _nationalityCtrl.text.trim(),
           countryOfResidence: _selectedCountryOfResidence?.name,
-          // Address
           addressLine1: _addressLine1Ctrl.text.trim().isEmpty
               ? null
               : _addressLine1Ctrl.text.trim(),
@@ -495,7 +486,6 @@ class _SelfieVerificationStepScreenState
               ? null
               : _postalCodeCtrl.text.trim(),
           issuingCountry: _selectedIssuingCountry?.name,
-          // Government ID
           governmentIdType: _governmentIdType,
           governmentIdNumber: _governmentIdNumberCtrl.text.trim().isEmpty
               ? null
@@ -593,7 +583,6 @@ class _SelfieVerificationStepScreenState
           _HeroCard(c: c),
           const SizedBox(height: 20),
 
-          // â”€â”€ Section: Contact â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _SectionHeader(c: c, label: 'Contact'),
           const SizedBox(height: 10),
           _AppTextField(
@@ -608,7 +597,6 @@ class _SelfieVerificationStepScreenState
 
           const SizedBox(height: 20),
 
-          // â”€â”€ Section: Personal Information â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _SectionHeader(c: c, label: 'Personal Information'),
           const SizedBox(height: 10),
           _AppTextField(
@@ -658,7 +646,6 @@ class _SelfieVerificationStepScreenState
               if (picked != null && mounted) {
                 setState(() {
                   _selectedCountryOfResidence = picked;
-                  // Auto-default issuing country if not explicitly chosen yet
                   _selectedIssuingCountry ??= picked;
                 });
               }
@@ -667,7 +654,6 @@ class _SelfieVerificationStepScreenState
 
           const SizedBox(height: 20),
 
-          // â”€â”€ Section: Address â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _SectionHeader(c: c, label: 'Address'),
           const SizedBox(height: 10),
           _AppTextField(
@@ -746,7 +732,6 @@ class _SelfieVerificationStepScreenState
 
           const SizedBox(height: 20),
 
-          // â”€â”€ Section: Government ID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _SectionHeader(c: c, label: 'Government ID'),
           const SizedBox(height: 10),
           _GovernmentIdTypeDropdown(
@@ -779,7 +764,6 @@ class _SelfieVerificationStepScreenState
 
           const SizedBox(height: 20),
 
-          // â”€â”€ Section: Documents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _SectionHeader(c: c, label: 'Documents'),
           const SizedBox(height: 10),
           _UploadCard(
@@ -826,7 +810,6 @@ class _SelfieVerificationStepScreenState
 
           const SizedBox(height: 20),
 
-          // â”€â”€ Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           SizedBox(
             height: 52,
             child: AppElevatedButton(
@@ -875,10 +858,6 @@ class _SelfieVerificationStepScreenState
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// HERO CARD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _HeroCard extends StatelessWidget {
   const _HeroCard({required this.c});
 
@@ -925,10 +904,6 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// SECTION HEADER
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.c, required this.label});
 
@@ -951,10 +926,6 @@ class _SectionHeader extends StatelessWidget {
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// GENERIC TEXT FIELD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AppTextField extends StatelessWidget {
   const _AppTextField({
@@ -1013,10 +984,6 @@ class _AppTextField extends StatelessWidget {
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// DATE PICKER FIELD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _DatePickerField extends StatelessWidget {
   const _DatePickerField({
@@ -1086,10 +1053,6 @@ class _DatePickerField extends StatelessWidget {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// GOVERNMENT ID TYPE DROPDOWN
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _GovernmentIdTypeDropdown extends StatelessWidget {
   const _GovernmentIdTypeDropdown({
     required this.c,
@@ -1150,10 +1113,6 @@ class _GovernmentIdTypeDropdown extends StatelessWidget {
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// UPLOAD CARD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _UploadCard extends StatelessWidget {
   const _UploadCard({
@@ -1344,10 +1303,6 @@ class _UploadCard extends StatelessWidget {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// COUNTRY PICKER FIELD  (tap-to-open, matches _DatePickerField style)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _CountryPickerField extends StatelessWidget {
   const _CountryPickerField({
     required this.c,
@@ -1423,10 +1378,6 @@ class _CountryPickerField extends StatelessWidget {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// COUNTRY PICKER SHEET  (searchable modal bottom sheet)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _CountryPickerSheet extends StatefulWidget {
   const _CountryPickerSheet({required this.c, this.title = 'Select Country'});
 
@@ -1500,7 +1451,6 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
         top: false,
         child: Column(
           children: [
-            // â”€â”€ Drag handle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             const SizedBox(height: 12),
             Container(
               width: 36,
@@ -1512,7 +1462,6 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             ),
             const SizedBox(height: 14),
 
-            // â”€â”€ Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -1548,7 +1497,6 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             ),
             const SizedBox(height: 12),
 
-            // â”€â”€ Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
@@ -1592,7 +1540,6 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
 
             Divider(height: 1, color: c.border.withValues(alpha: 0.15)),
 
-            // â”€â”€ List â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Expanded(child: _buildList(c)),
           ],
         ),
@@ -1702,10 +1649,6 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// PAYMENT ACCOUNT HINT
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PaymentAccountHint extends StatelessWidget {
   const _PaymentAccountHint({
@@ -2018,4 +1961,3 @@ class _ReviewHistoryItem extends StatelessWidget {
     }
   }
 }
-

@@ -1,4 +1,3 @@
-// lib/features/settings/view/widgets/settings_card.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/features/settings/data/models/settings_model.dart';

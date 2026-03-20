@@ -117,7 +117,8 @@ class _HomeState extends ConsumerState<Home> {
         tabs.setTab(0);
         final assetId = (payload['assetId'] ?? payload['asset'] ?? 'stellar')
             .toString();
-        final balance = wallet.balancesByAssetId[assetId] ??
+        final balance =
+            wallet.balancesByAssetId[assetId] ??
             (assetId == 'stellar' ? wallet.xlm : 0.0);
         await Navigator.of(context).push(
           MaterialPageRoute(
@@ -152,9 +153,9 @@ class _HomeState extends ConsumerState<Home> {
       case 'trades':
       case '/trades':
         tabs.setTab(0);
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TradeHistoryScreen()),
-        );
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const TradeHistoryScreen()));
         return true;
       case 'verification':
       case '/verification':

@@ -44,7 +44,6 @@ class TransactionTile extends StatelessWidget {
     int? recColor = (tx['recColor'] as int?);
     RecipientAddressModel? rec;
 
-    // hydrate recipient cache if missing on tx
     if (recName == null || recColor == null) {
       rec = recipProv.byAddress(peerAddr);
       if (rec != null) {
@@ -64,7 +63,6 @@ class TransactionTile extends StatelessWidget {
         ? '$recName (${shortAddr(peerAddr)})'
         : shortAddr(peerAddr);
 
-    // Leading: your AssetLogo + tiny direction drawer
     Widget leading = Stack(
       clipBehavior: Clip.none,
       children: [
@@ -113,5 +111,3 @@ class TransactionTile extends StatelessWidget {
     );
   }
 }
-
-

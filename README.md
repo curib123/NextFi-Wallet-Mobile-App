@@ -85,7 +85,7 @@ Example (optional) dart‑defines:
 ```bash
 flutter run \
   --dart-define=USE_TESTNET=true \
-  --dart-define=HORIZON_URL=https://horizon-testnet.stellar.org
+  --dart-define=HORIZON_URL=https:
 ```
 
 ---

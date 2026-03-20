@@ -1,5 +1,5 @@
-// lib/features/price_chart/model/price_chart_state.dart
 enum PriceChartRange { h24, w1, m1, y1, all }
+
 enum PriceToken { xlm, usdc }
 
 extension PriceChartRangeX on PriceChartRange {
@@ -42,7 +42,6 @@ extension PriceTokenX on PriceToken {
 
 String fiatSymbol(String fiat) {
   switch (fiat.toUpperCase()) {
-    // Americas
     case 'USD':
       return r'$';
     case 'CAD':
@@ -57,7 +56,6 @@ String fiatSymbol(String fiat) {
       return r'$';
     case 'COP':
       return r'$';
-    // Europe
     case 'EUR':
       return '\u20AC';
     case 'GBP':
@@ -84,7 +82,6 @@ String fiatSymbol(String fiat) {
       return '\u20BD';
     case 'UAH':
       return '\u20B4';
-    // Asia-Pacific
     case 'JPY':
       return '\u00A5';
     case 'CNY':
@@ -117,7 +114,6 @@ String fiatSymbol(String fiat) {
       return 'A\$';
     case 'NZD':
       return 'NZ\$';
-    // Middle East / Africa
     case 'AED':
       return '\u062F.\u0625';
     case 'SAR':

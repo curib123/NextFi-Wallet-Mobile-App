@@ -1,7 +1,5 @@
-// lib/features/swap/model/swap_state.dart
 import 'package:next_fi/features/swap/data/models/swap_dir.dart';
 
-/// Internal sentinel used to mean "no change" in copyWith for nullable fields.
 const Object _noChange = Object();
 
 class SwapState {
@@ -12,10 +10,8 @@ class SwapState {
   final double xlmBal;
   final double usdcBal;
 
-  /// Estimated "to" amount for current "from" amount.
   final double? estReceive;
 
-  /// Network fee estimate (in XLM).
   final double? feeXlm;
 
   final bool needsTrustline;
@@ -36,9 +32,6 @@ class SwapState {
 
   bool get isXlmToUsdc => dir == SwapDir.xlmToUsdc;
 
-  /// `copyWith` that supports:
-  /// - Keeping current values when a parameter is omitted
-  /// - Explicitly clearing nullable fields by passing `null`
   SwapState copyWith({
     bool? loading,
     Object? error = _noChange,
@@ -61,8 +54,7 @@ class SwapState {
       estReceive: identical(estReceive, _noChange)
           ? this.estReceive
           : estReceive as double?,
-      feeXlm:
-      identical(feeXlm, _noChange) ? this.feeXlm : feeXlm as double?,
+      feeXlm: identical(feeXlm, _noChange) ? this.feeXlm : feeXlm as double?,
       needsTrustline: needsTrustline ?? this.needsTrustline,
       dir: dir ?? this.dir,
     );

@@ -1,10 +1,8 @@
-// stellar_claimable_balance_service.dart
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_account_service.dart';
 
-/// Service for claimable balances (time-locked and conditional payments)
 class StellarClaimableBalanceService extends StellarBaseService {
   final StellarAccountService accountService;
 
@@ -16,10 +14,6 @@ class StellarClaimableBalanceService extends StellarBaseService {
     super.quickNodeUrlTestnet,
     super.quickNodeDefaultHeaders,
   });
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Create Claimable Balances
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<String> createClaimableBalance({
     required KeyPair keyPair,
@@ -48,18 +42,26 @@ class StellarClaimableBalanceService extends StellarBaseService {
 
     try {
       if (asset is! AssetTypeNative) {
-        await accountService.ensureTrustline(keyPair, asset, onProgress: onProgress);
+        await accountService.ensureTrustline(
+          keyPair,
+          asset,
+          onProgress: onProgress,
+        );
       }
 
       onProgress?.call('Checking balance...');
-      final balance = await accountService.getAssetBalance(keyPair.accountId, asset);
+      final balance = await accountService.getAssetBalance(
+        keyPair.accountId,
+        asset,
+      );
       if (balance < amount) {
         final assetName = asset is AssetTypeCreditAlphaNum ? asset.code : 'XLM';
         fail(
           'Not enough $assetName in your wallet',
-          technicalError: 'Have: ${StellarBaseService.fmt7(balance)}, Need: ${StellarBaseService.fmt7(amount)}',
+          technicalError:
+              'Have: ${StellarBaseService.fmt7(balance)}, Need: ${StellarBaseService.fmt7(amount)}',
           advice:
-          'You need ${StellarBaseService.fmt7(amount - balance)} more $assetName to create this payment',
+              'You need ${StellarBaseService.fmt7(amount - balance)} more $assetName to create this payment',
           code: 'INSUFFICIENT_BALANCE',
         );
       }
@@ -106,10 +108,7 @@ class StellarClaimableBalanceService extends StellarBaseService {
     required String recipientId,
     ProgressCallback? onProgress,
   }) async {
-    final claimant = Claimant(
-      recipientId,
-      Claimant.predicateUnconditional(),
-    );
+    final claimant = Claimant(recipientId, Claimant.predicateUnconditional());
 
     return createClaimableBalance(
       keyPair: keyPair,
@@ -206,7 +205,7 @@ class StellarClaimableBalanceService extends StellarBaseService {
       fail(
         'Expiration must be after unlock time',
         advice:
-        'The expiration date needs to be after the unlock date so the recipient has a window to claim',
+            'The expiration date needs to be after the unlock date so the recipient has a window to claim',
         code: 'EXPIRY_BEFORE_UNLOCK',
       );
     }
@@ -240,10 +239,6 @@ class StellarClaimableBalanceService extends StellarBaseService {
     );
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Claim Balances
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<String> claimClaimableBalance({
     required KeyPair keyPair,
     required String balanceId,
@@ -256,8 +251,8 @@ class StellarClaimableBalanceService extends StellarBaseService {
       final tx = TransactionBuilder(acc)
           .setMaxOperationFee(100)
           .addOperation(
-        ClaimClaimableBalanceOperationBuilder(balanceId).build(),
-      )
+            ClaimClaimableBalanceOperationBuilder(balanceId).build(),
+          )
           .build();
       tx.sign(keyPair, network);
 
@@ -272,14 +267,10 @@ class StellarClaimableBalanceService extends StellarBaseService {
         'Unable to claim payment',
         technicalError: e,
         advice:
-        'The payment may have expired or already been claimed. Please check and try again',
+            'The payment may have expired or already been claimed. Please check and try again',
       );
     }
   }
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Query Balances
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<List<ClaimableBalanceResponse>> getClaimableBalances({
     required String accountId,
@@ -333,10 +324,7 @@ class StellarClaimableBalanceService extends StellarBaseService {
         limit: limit,
       );
 
-      return {
-        'received': received,
-        'sent': sent,
-      };
+      return {'received': received, 'sent': sent};
     } catch (e) {
       fail(
         'Unable to fetch claimable payments',

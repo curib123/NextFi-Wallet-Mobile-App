@@ -70,18 +70,24 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
     );
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.08)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 1.08,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 30,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.08, end: 0.98)
-            .chain(CurveTween(curve: Curves.easeInOut)),
+        tween: Tween<double>(
+          begin: 1.08,
+          end: 0.98,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
         weight: 30,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.98, end: 1.0)
-            .chain(CurveTween(curve: Curves.elasticOut)),
+        tween: Tween<double>(
+          begin: 0.98,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.elasticOut)),
         weight: 40,
       ),
     ]).animate(_scaleController);
@@ -91,10 +97,7 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
       vsync: this,
     );
     _glowAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _glowController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
     );
 
     _iconBounceController = AnimationController(
@@ -184,7 +187,9 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
 
       final progress = 1 - (delta.abs() / (widget.targetValue.abs() + 1));
       final easing = Curves.easeOutCubic.transform(progress.clamp(0.0, 1.0));
-      final dynamicStep = (delta.abs() / 3.5).clamp(_minStep, double.infinity) * (1 - easing * 0.7);
+      final dynamicStep =
+          (delta.abs() / 3.5).clamp(_minStep, double.infinity) *
+          (1 - easing * 0.7);
       final step = delta.isNegative ? -dynamicStep : dynamicStep;
 
       setState(() {
@@ -215,9 +220,7 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
     final downColor = widget.downColor ?? colors.error;
     final color = widget.forceBaseColor
         ? widget.baseColor
-        : (_dir == 0
-            ? widget.baseColor
-            : (_dir > 0 ? upColor : downColor));
+        : (_dir == 0 ? widget.baseColor : (_dir > 0 ? upColor : downColor));
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: double.infinity),
@@ -236,13 +239,16 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
                   child: FadeTransition(
                     opacity: animation,
                     child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, -0.3),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
-                      )),
+                      position:
+                          Tween<Offset>(
+                            begin: const Offset(0, -0.3),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          ),
                       child: child,
                     ),
                   ),
@@ -251,16 +257,16 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
               child: (!widget.animate || _dir == 0)
                   ? const SizedBox(width: 0, key: ValueKey('eq'))
                   : ScaleTransition(
-                scale: _iconBounceAnimation,
-                child: Icon(
-                  _dir > 0
-                      ? LucideIcons.trendingUp
-                      : LucideIcons.trendingDown,
-                  key: ValueKey(_dir > 0 ? 'up' : 'down'),
-                  size: 20,
-                  color: color,
-                ),
-              ),
+                      scale: _iconBounceAnimation,
+                      child: Icon(
+                        _dir > 0
+                            ? LucideIcons.trendingUp
+                            : LucideIcons.trendingDown,
+                        key: ValueKey(_dir > 0 ? 'up' : 'down'),
+                        size: 20,
+                        color: color,
+                      ),
+                    ),
             ),
           if (widget.showTrendIcon && _dir != 0) const SizedBox(width: 8),
 
@@ -273,14 +279,16 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
                 curve: Curves.easeOutCubic,
                 decoration: widget.enableGlow && _dir != 0
                     ? BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.3 * _glowAnimation.value),
-                      blurRadius: 16 * _glowAnimation.value,
-                      spreadRadius: 2 * _glowAnimation.value,
-                    ),
-                  ],
-                )
+                        boxShadow: [
+                          BoxShadow(
+                            color: color.withValues(
+                              alpha: 0.3 * _glowAnimation.value,
+                            ),
+                            blurRadius: 16 * _glowAnimation.value,
+                            spreadRadius: 2 * _glowAnimation.value,
+                          ),
+                        ],
+                      )
                     : null,
                 child: AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 300),
@@ -297,10 +305,7 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOut,
                     builder: (context, value, child) {
-                      return Opacity(
-                        opacity: value,
-                        child: child,
-                      );
+                      return Opacity(opacity: value, child: child);
                     },
                     child: Text(
                       widget.hidden ? '••••' : widget.fmt.format(_display),
@@ -318,10 +323,7 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
             const SizedBox(width: 10),
             ScaleTransition(
               scale: Tween<double>(begin: 0.8, end: 1.2).animate(
-                CurvedAnimation(
-                  parent: widget.pulse!,
-                  curve: Curves.easeInOut,
-                ),
+                CurvedAnimation(parent: widget.pulse!, curve: Curves.easeInOut),
               ),
               child: FadeTransition(
                 opacity: Tween<double>(begin: 0.4, end: 1.0).animate(
@@ -353,4 +355,3 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
     );
   }
 }
-

@@ -1,4 +1,3 @@
-// lib/features/claimable/view/widgets/claimable_empty.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -98,4 +97,3 @@ class ClaimableEmpty extends StatelessWidget {
     );
   }
 }
-

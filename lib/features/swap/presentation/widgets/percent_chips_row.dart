@@ -1,13 +1,8 @@
-// lib/features/swap/view/widgets/percent_chips_row.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
 class PercentChipsRow extends StatelessWidget {
-  const PercentChipsRow({
-    super.key,
-    required this.onPick,
-    this.activePct,
-  });
+  const PercentChipsRow({super.key, required this.onPick, this.activePct});
 
   final void Function(double pct) onPick;
   final double? activePct;

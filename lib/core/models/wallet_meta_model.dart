@@ -1,10 +1,9 @@
-/// Minimal metadata per wallet (top-level type).
 class WalletMetaModel {
   final String id;
   String name;
   String createdAt;
   String? lastUsedAt;
-  String? publicAddress; // optional hint for UI
+  String? publicAddress;
 
   WalletMetaModel({
     required this.id,

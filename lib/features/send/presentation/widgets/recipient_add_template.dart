@@ -1,4 +1,3 @@
-// lib/features/send/view/widgets/recipient_add_template.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -23,13 +22,12 @@ class RecipientAddTemplate extends StatelessWidget {
     final c = AppColor.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Explicit solid colors — no runtime opacity mixing
-    final bgColor     = isDark ? c.textPrimary : c.background;
+    final bgColor = isDark ? c.textPrimary : c.background;
     final borderColor = isDark ? c.textPrimary : c.border;
-    final iconBg      = isDark ? c.textPrimary : c.background;
-    final iconColor   = isDark ? c.info : c.primary;
-    final saveBg      = isDark ? c.textPrimary : c.surface;
-    final saveColor   = isDark ? c.info : c.primaryDark;
+    final iconBg = isDark ? c.textPrimary : c.background;
+    final iconColor = isDark ? c.info : c.primary;
+    final saveBg = isDark ? c.textPrimary : c.surface;
+    final saveColor = isDark ? c.info : c.primaryDark;
     final addressColor = isDark ? c.textSecondary : c.accent;
 
     return Container(
@@ -41,7 +39,6 @@ class RecipientAddTemplate extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // ── Icon ──────────────────────────────────────────────────────
           Container(
             width: 42,
             height: 42,
@@ -55,7 +52,6 @@ class RecipientAddTemplate extends StatelessWidget {
           ),
           const SizedBox(width: 13),
 
-          // ── Text ──────────────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,7 +84,6 @@ class RecipientAddTemplate extends StatelessWidget {
           ),
           const SizedBox(width: 10),
 
-          // ── Save CTA ──────────────────────────────────────────────────
           GestureDetector(
             onTap: onAdd,
             behavior: HitTestBehavior.opaque,
@@ -114,4 +109,3 @@ class RecipientAddTemplate extends StatelessWidget {
     );
   }
 }
-

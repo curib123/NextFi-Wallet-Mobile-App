@@ -1,4 +1,3 @@
-// lib/features/receive/view/receive_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
@@ -73,7 +72,8 @@ class ReceiveScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           _SectionLabel(
             title: 'Stellar Wallet Address',
-            subtitle: 'Use this same address to receive supported Stellar assets.',
+            subtitle:
+                'Use this same address to receive supported Stellar assets.',
           ),
           const SizedBox(height: 10),
           AddressRow(address: s.address),
@@ -109,10 +109,7 @@ class ReceiveScreen extends ConsumerWidget {
   }
 
   ReceiveState _toReceiveState(String address, String assetSymbol) {
-    return ReceiveState(
-      address: address,
-      assetSymbol: assetSymbol,
-    );
+    return ReceiveState(address: address, assetSymbol: assetSymbol);
   }
 
   Widget _buildFederationSection(
@@ -475,4 +472,3 @@ class _SectionLabel extends StatelessWidget {
     );
   }
 }
-

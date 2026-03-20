@@ -289,8 +289,7 @@ final swapVmProvider = ChangeNotifierProvider<SwapVM>((ref) {
     keypairVM: seed,
     walletHomeVM: walletHome,
     assetVM: assets,
-  )
-    ..bindToAddress(seed.accountId);
+  )..bindToAddress(seed.accountId);
 
   void syncSeed() => vm.bindToAddress(seed.accountId);
 

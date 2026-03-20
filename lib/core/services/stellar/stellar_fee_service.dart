@@ -1,4 +1,3 @@
-// stellar_fee_service.dart
 import 'dart:async';
 import 'dart:convert';
 
@@ -8,8 +7,6 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 
-/// Service for fee estimation and price quotes.
-/// Fee policy comes from backend `/api/v1/fee-config`.
 class StellarFeeService extends StellarBaseService {
   final String usdcIssuer;
   final FeeConfigCoreService feeConfigCore;

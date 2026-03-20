@@ -11,9 +11,7 @@ class AssetCatalogService {
       encryptedSharedPreferences: true,
       resetOnError: true,
     ),
-    iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
-    ),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
   static const String _catalogCacheKey = 'nextfi.asset_catalog.cache.v1';
   static const String _catalogCacheUpdatedAtKey =
@@ -63,9 +61,7 @@ class AssetCatalogService {
         key: _catalogCacheUpdatedAtKey,
         value: DateTime.now().toUtc().toIso8601String(),
       );
-    } catch (_) {
-      // Ignore cache write failures and keep runtime data alive.
-    }
+    } catch (_) {}
   }
 
   Future<List<AssetModel>> fetchAssetsAndUpdateCache() async {

@@ -1,23 +1,18 @@
-// lib/features/transactions/model/transactions_state.dart
 import 'package:next_fi/features/transactions/data/models/tx.dart';
 
 class TransactionsState {
   final String? address;
 
-  // UI state
   final bool loading;
   final bool loadingMore;
   final bool hasMore;
   final String? errorMsg;
   final bool accountMissing;
 
-  // Paging
   final String? cursor;
 
-  // Data
   final List<Tx> txs;
 
-  // Filter
   final TxFilter filter;
 
   const TransactionsState({

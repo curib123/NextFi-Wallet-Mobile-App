@@ -1,4 +1,3 @@
-// lib/features/price_chart/view/widgets/token_tabs.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 
@@ -33,38 +32,44 @@ class TokenTabs extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: items.map((asset) {
-          final assetKey = asset.id;
-          final selected =
-              assetKey.toLowerCase() == token.toLowerCase() ||
-              asset.symbol.toLowerCase() == token.toLowerCase();
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: InkWell(
-              onTap: () => onChanged(assetKey),
-              borderRadius: BorderRadius.circular(999),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: selected ? c.primary.withValues(alpha: 0.14) : c.surface,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  asset.symbol.toUpperCase(),
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11,
-                    letterSpacing: 0.2,
-                    color: selected ? c.primary : c.onSurface.withValues(alpha: 0.7),
+            final assetKey = asset.id;
+            final selected =
+                assetKey.toLowerCase() == token.toLowerCase() ||
+                asset.symbol.toLowerCase() == token.toLowerCase();
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: InkWell(
+                onTap: () => onChanged(assetKey),
+                borderRadius: BorderRadius.circular(999),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? c.primary.withValues(alpha: 0.14)
+                        : c.surface,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    asset.symbol.toUpperCase(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                      letterSpacing: 0.2,
+                      color: selected
+                          ? c.primary
+                          : c.onSurface.withValues(alpha: 0.7),
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
         ),
       ),
     );
   }
 }
-

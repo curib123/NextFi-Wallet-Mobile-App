@@ -1,17 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-/// Minimal Soroban JSON-RPC client (fallback only).
 class SorobanRpc {
   final String base;
   final Map<String, String>? headers;
   const SorobanRpc(this.base, [this.headers]);
 
   Future<Map<String, dynamic>?> _rpc(
-      String method, {
-        Object? params,
-        Duration timeout = const Duration(seconds: 20),
-      }) async {
+    String method, {
+    Object? params,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
     final uri = Uri.parse(base);
     final payload = json.encode({
       'jsonrpc': '2.0',
@@ -21,10 +20,13 @@ class SorobanRpc {
     });
     final resp = await http
         .post(
-      uri,
-      headers: {'content-type': 'application/json', if (headers != null) ...headers!},
-      body: payload,
-    )
+          uri,
+          headers: {
+            'content-type': 'application/json',
+            if (headers != null) ...headers!,
+          },
+          body: payload,
+        )
         .timeout(timeout);
     if (resp.statusCode != 200) return null;
     final j = json.decode(resp.body) as Map<String, dynamic>;
@@ -33,7 +35,10 @@ class SorobanRpc {
   }
 
   Future<String?> sendTransaction(String envelopeB64) async {
-    final r = await _rpc('sendTransaction', params: {'transaction': envelopeB64});
+    final r = await _rpc(
+      'sendTransaction',
+      params: {'transaction': envelopeB64},
+    );
     return (r?['hash'] as String?);
   }
 

@@ -22,10 +22,7 @@ class TokenResponse {
   final String accessToken;
   final String refreshToken;
 
-  const TokenResponse({
-    required this.accessToken,
-    required this.refreshToken,
-  });
+  const TokenResponse({required this.accessToken, required this.refreshToken});
 
   factory TokenResponse.fromJson(Map<String, dynamic> json) => TokenResponse(
     accessToken: json['accessToken'] as String,

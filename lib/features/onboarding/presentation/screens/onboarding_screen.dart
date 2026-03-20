@@ -8,8 +8,6 @@ import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:next_fi/features/onboarding/presentation/viewmodels/onboarding_controller.dart';
 import 'package:next_fi/features/wallet_creation/presentation/widgets/fintech_background.dart';
 
-// ─── Slide data ───────────────────────────────────────────────────────────────
-
 class _OnboardingSlide {
   const _OnboardingSlide({
     required this.eyebrow,
@@ -56,8 +54,6 @@ const List<_OnboardingSlide> _slides = <_OnboardingSlide>[
     ],
   ),
 ];
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key, required this.onFinish});
@@ -119,7 +115,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
       backgroundColor: colors.background,
       body: Stack(
         children: <Widget>[
-          // ── Background ──────────────────────────────────────────────────────
           Positioned.fill(
             child: IgnorePointer(
               child: Stack(
@@ -131,8 +126,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                       builder: (_, __) => FintechBackground(
                         progress: _bgCtrl.value,
                         colors: colors,
-                        devicePixelRatio:
-                        MediaQuery.of(context).devicePixelRatio,
+                        devicePixelRatio: MediaQuery.of(
+                          context,
+                        ).devicePixelRatio,
                         topBandFraction: .38,
                       ),
                     )
@@ -163,7 +159,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
             ),
           ),
 
-          // ── Content ─────────────────────────────────────────────────────────
           SafeArea(
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
@@ -172,7 +167,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
 
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
-                      h, compact ? 16 : 24, h, compact ? 20 : 28),
+                    h,
+                    compact ? 16 : 24,
+                    h,
+                    compact ? 20 : 28,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -207,8 +206,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                         currentIndex: onboarding.currentIndex,
                         slideCount: _slides.length,
                         finishing: onboarding.finishing,
-                        onBack: onboarding.currentIndex == 0 ||
-                            onboarding.finishing
+                        onBack:
+                            onboarding.currentIndex == 0 || onboarding.finishing
                             ? null
                             : () => _goToPage(onboarding.currentIndex - 1),
                         onNext: onboarding.finishing ? null : _next,
@@ -224,8 +223,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
     );
   }
 }
-
-// ─── Header ───────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
   const _Header({required this.colors, required this.onSkip});
@@ -248,10 +245,7 @@ class _Header extends StatelessWidget {
             border: Border.all(color: colors.border),
           ),
           padding: const EdgeInsets.all(6),
-          child: Image.asset(
-            _appIconAsset,
-            fit: BoxFit.contain,
-          ),
+          child: Image.asset(_appIconAsset, fit: BoxFit.contain),
         ),
         const SizedBox(width: 10),
         Text(
@@ -280,8 +274,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-// ─── Slide — pure layout, no card/box ────────────────────────────────────────
-
 class _SlideContent extends StatelessWidget {
   const _SlideContent({
     required this.slide,
@@ -308,7 +300,6 @@ class _SlideContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          // Icon chip
           Container(
             width: compact ? 52 : 60,
             height: compact ? 52 : 60,
@@ -320,15 +311,11 @@ class _SlideContent extends StatelessWidget {
               ),
             ),
             padding: EdgeInsets.all(compact ? 10 : 12),
-            child: Image.asset(
-              _appIconAsset,
-              fit: BoxFit.contain,
-            ),
+            child: Image.asset(_appIconAsset, fit: BoxFit.contain),
           ),
 
           SizedBox(height: compact ? 28 : 40),
 
-          // Eyebrow
           Text(
             slide.eyebrow,
             style: AppFonts.label(
@@ -341,7 +328,6 @@ class _SlideContent extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // Title
           Text(
             slide.title,
             style: AppFonts.headline(
@@ -353,7 +339,6 @@ class _SlideContent extends StatelessWidget {
 
           SizedBox(height: compact ? 14 : 18),
 
-          // Body — one short sentence, low contrast
           Text(
             slide.body,
             style: AppFonts.body(
@@ -365,11 +350,11 @@ class _SlideContent extends StatelessWidget {
 
           SizedBox(height: compact ? 32 : 44),
 
-          // Bullets — bare dots, no container
           ...List<Widget>.generate(slide.bullets.length, (int i) {
             return Padding(
               padding: EdgeInsets.only(
-                  bottom: i < slide.bullets.length - 1 ? 16 : 0),
+                bottom: i < slide.bullets.length - 1 ? 16 : 0,
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
@@ -400,8 +385,6 @@ class _SlideContent extends StatelessWidget {
   }
 }
 
-// ─── Footer ───────────────────────────────────────────────────────────────────
-
 class _Footer extends StatelessWidget {
   const _Footer({
     required this.colors,
@@ -427,7 +410,6 @@ class _Footer extends StatelessWidget {
 
     return Row(
       children: <Widget>[
-        // Pill dots
         Row(
           children: List<Widget>.generate(slideCount, (int i) {
             final bool active = currentIndex == i;
@@ -447,40 +429,43 @@ class _Footer extends StatelessWidget {
 
         const Spacer(),
 
-        // Back — only when visible
         if (onBack != null) ...<Widget>[
-          _IconBtn(icon: Icons.arrow_back_rounded, onTap: onBack, colors: colors),
+          _IconBtn(
+            icon: Icons.arrow_back_rounded,
+            onTap: onBack,
+            colors: colors,
+          ),
           const SizedBox(width: 10),
         ],
 
-        // CTA
         AppFilledButton(
           onPressed: finishing ? null : onNext,
           child: finishing
               ? SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colors.onPrimary,
-            ),
-          )
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colors.onPrimary,
+                  ),
+                )
               : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(isLast ? 'Get started' : 'Continue'),
-              const SizedBox(width: 6),
-              Icon(Icons.arrow_forward_rounded,
-                  size: 16, color: colors.onPrimary),
-            ],
-          ),
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(isLast ? 'Get started' : 'Continue'),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: colors.onPrimary,
+                    ),
+                  ],
+                ),
         ),
       ],
     );
   }
 }
-
-// ─── Icon button ──────────────────────────────────────────────────────────────
 
 class _IconBtn extends StatelessWidget {
   const _IconBtn({

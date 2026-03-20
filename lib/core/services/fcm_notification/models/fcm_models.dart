@@ -1,7 +1,7 @@
 class UpsertFcmTokenRequest {
   final String token;
   final String? deviceId;
-  final String? platform;   // android | ios | web
+  final String? platform;
   final String? appVersion;
 
   const UpsertFcmTokenRequest({
@@ -24,11 +24,7 @@ class SendPushRequest {
   final String body;
   final Map<String, String>? data;
 
-  const SendPushRequest({
-    required this.title,
-    required this.body,
-    this.data,
-  });
+  const SendPushRequest({required this.title, required this.body, this.data});
 
   Map<String, dynamic> toJson() => {
     'title': title,
@@ -48,10 +44,7 @@ class SendPushToUserRequest extends SendPushRequest {
   });
 
   @override
-  Map<String, dynamic> toJson() => {
-    'userId': userId,
-    ...super.toJson(),
-  };
+  Map<String, dynamic> toJson() => {'userId': userId, ...super.toJson()};
 }
 
 class SendPushToTokenRequest extends SendPushRequest {
@@ -65,8 +58,5 @@ class SendPushToTokenRequest extends SendPushRequest {
   });
 
   @override
-  Map<String, dynamic> toJson() => {
-    'token': token,
-    ...super.toJson(),
-  };
+  Map<String, dynamic> toJson() => {'token': token, ...super.toJson()};
 }

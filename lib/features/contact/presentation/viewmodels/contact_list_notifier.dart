@@ -103,10 +103,16 @@ class ContactListNotifier extends Notifier<ContactListState> {
     if (!state.isAuthenticated) {
       throw Exception('Not authenticated. Please login first.');
     }
-    final added = await _service.add(name: name, address: address, color: color);
+    final added = await _service.add(
+      name: name,
+      address: address,
+      color: color,
+    );
     final next = [...state.items];
     final index = next.indexWhere(
-      (item) => item.address.trim().toLowerCase() == added.address.trim().toLowerCase(),
+      (item) =>
+          item.address.trim().toLowerCase() ==
+          added.address.trim().toLowerCase(),
     );
     if (index >= 0) {
       next[index] = added;

@@ -26,12 +26,10 @@ class VerificationCoreService {
   Future<VerificationModel> getMe() async => _api.getMe();
 
   Future<VerificationModel> submit({
-    // â”€â”€ Required â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     required String phoneNumber,
     required File selfie,
     required File governmentIdFront,
     required File governmentIdBack,
-    // â”€â”€ Identity snapshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     String? fullLegalName,
     DateTime? dateOfBirth,
     String? nationality,
@@ -42,13 +40,10 @@ class VerificationCoreService {
     String? stateOrProvince,
     String? postalCode,
     String? issuingCountry,
-    // â”€â”€ Government ID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     GovernmentIdType? governmentIdType,
     String? governmentIdNumber,
     DateTime? governmentIdExpiry,
-    // â”€â”€ Payment account â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     String? paymentAccountId,
-    // â”€â”€ Consent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     DateTime? consentAcceptedAt,
     String? consentVersion,
   }) async => _api.submit(

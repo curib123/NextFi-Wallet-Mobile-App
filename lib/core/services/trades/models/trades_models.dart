@@ -43,7 +43,6 @@ enum TradeStatus {
     }
   }
 
-  /// Returns a user-friendly label for this status
   String get label {
     switch (this) {
       case TradeStatus.created:
@@ -69,7 +68,6 @@ enum TradeStatus {
     }
   }
 
-  /// Returns the icon for this status
   String get iconName {
     switch (this) {
       case TradeStatus.starting:
@@ -109,7 +107,6 @@ enum TradeStatus {
       this == TradeStatus.expired;
 }
 
-/// Status of the Claimable Balance escrow
 enum EscrowStatus {
   pending,
   cbCreated,
@@ -216,7 +213,6 @@ class TradeEscrowModel {
   }
 }
 
-/// Type of offer - determines trade flow
 enum TradeOfferType {
   buy,
   sell,
@@ -233,7 +229,6 @@ enum TradeOfferType {
     }
   }
 
-  /// Whether the current user is the buyer in this trade
   bool isUserBuyer(String currentUserId, String buyerId, String sellerId) {
     return currentUserId == buyerId;
   }
@@ -388,13 +383,11 @@ class TradeModel {
     final mpaRaw =
         json['merchantPaymentAccount'] ?? json['merchant_payment_account'];
 
-    // Read offer type from the nested offer object or directly from trade
     TradeOfferType readOfferType() {
       final type = json['offerType']?.toString() ?? json['type']?.toString();
       if (type != null && type.isNotEmpty) {
         return TradeOfferType.fromString(type);
       }
-      // Try to get from offer object
       if (offerRaw is Map<String, dynamic>) {
         final offerType = offerRaw['type']?.toString();
         return TradeOfferType.fromString(offerType);

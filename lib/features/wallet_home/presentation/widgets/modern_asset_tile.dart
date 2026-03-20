@@ -65,8 +65,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
     _scaleAnimation = Tween<double>(
       begin: 1.0,
       end: 0.986,
-    ).animate(
-        CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
   }
 
   @override
@@ -91,7 +90,9 @@ class _ModernAssetTileState extends State<ModernAssetTile>
   }
 
   _BadgeSpec? get _primaryBadge {
-    final normalized = widget.asset.badges.map((badge) => badge.trim().toUpperCase()).toList();
+    final normalized = widget.asset.badges
+        .map((badge) => badge.trim().toUpperCase())
+        .toList();
 
     if (normalized.contains('EARN')) {
       return _BadgeSpec(
@@ -127,10 +128,10 @@ class _ModernAssetTileState extends State<ModernAssetTile>
   @override
   Widget build(BuildContext context) {
     final trendUp = widget.priceDelta >= 0;
-    final trendColor =
-    trendUp ? widget.colors.success : widget.colors.error;
-    final pctColor =
-    widget.pct >= 0 ? widget.colors.success : widget.colors.error;
+    final trendColor = trendUp ? widget.colors.success : widget.colors.error;
+    final pctColor = widget.pct >= 0
+        ? widget.colors.success
+        : widget.colors.error;
     final symbol = widget.asset.symbol.toUpperCase();
     final primaryBadge = _primaryBadge;
 
@@ -154,9 +155,9 @@ class _ModernAssetTileState extends State<ModernAssetTile>
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: AppColor.of(context)
-                      .textPrimary
-                      .withValues(alpha: _isPressed ? 0.03 : 0.06),
+                  color: AppColor.of(
+                    context,
+                  ).textPrimary.withValues(alpha: _isPressed ? 0.03 : 0.06),
                   blurRadius: _isPressed ? 8 : 18,
                   spreadRadius: _isPressed ? 0 : 0.5,
                   offset: Offset(0, _isPressed ? 2 : 6),
@@ -166,7 +167,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // ── Logo (fixed width, never shrinks) ──────────────────
                 _AssetLogo(
                   url: widget.logoUrl,
                   colors: widget.colors,
@@ -177,13 +177,11 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                 ),
                 const SizedBox(width: 8),
 
-                // ── Left info column (takes all remaining space) ────────
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Token amount + symbol – single line, ellipsis
                       Text(
                         '${widget.formatTokenAmount(widget.balance)} $symbol',
                         style: TextStyle(
@@ -197,7 +195,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      // Asset name
                       Text(
                         widget.asset.name,
                         style: TextStyle(
@@ -210,7 +207,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      // Price line
                       Text(
                         _priceLine(symbol),
                         style: TextStyle(
@@ -228,7 +224,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                 ),
                 const SizedBox(width: 8),
 
-                // ── Divider (fixed, never flexible) ────────────────────
                 Container(
                   width: 1,
                   height: 42,
@@ -236,11 +231,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                 ),
                 const SizedBox(width: 8),
 
-                // ── Right value column (intrinsic, bounded) ─────────────
-                //
-                // Using IntrinsicWidth so the column is only as wide as its
-                // widest child, but we cap it with ConstrainedBox so it
-                // never overflows on narrow screens.
                 ConstrainedBox(
                   constraints: const BoxConstraints(
                     minWidth: 72,
@@ -250,7 +240,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Fiat value
                       Text(
                         widget.money.format(widget.fiatNow),
                         textAlign: TextAlign.right,
@@ -266,19 +255,16 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                         overflow: TextOverflow.ellipsis,
                       ),
 
-                      // Sparkline + trend badge row
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Sparkline: fixed size, never flexible
                           _MiniSparkline(
                             series: widget.miniSeries,
                             color: trendColor,
                           ),
                           const SizedBox(width: 4),
-                          // Trend icon + pct badge: shrinks via FittedBox
                           Flexible(
                             child: FittedBox(
                               fit: BoxFit.scaleDown,
@@ -294,10 +280,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                                     color: trendColor,
                                   ),
                                   const SizedBox(width: 3),
-                                  _PctBadge(
-                                    pct: widget.pct,
-                                    color: pctColor,
-                                  ),
+                                  _PctBadge(pct: widget.pct, color: pctColor),
                                 ],
                               ),
                             ),
@@ -306,7 +289,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                       ),
                       const SizedBox(height: 4),
 
-                      // Signed price delta
                       Text(
                         widget.formatSignedMoney(
                           widget.money,
@@ -334,10 +316,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _AssetLogo
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _AssetLogo extends StatelessWidget {
   const _AssetLogo({
@@ -375,7 +353,6 @@ class _AssetLogo extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Logo image – fixed 36×36 slot
           Positioned(
             top: 0,
             left: 5,
@@ -387,39 +364,38 @@ class _AssetLogo extends StatelessWidget {
                 child: (url == null || url!.isEmpty)
                     ? fallback
                     : Hero(
-                  tag: 'asset_logo_$assetId',
-                  child: AssetRemoteImage(
-                    url: url,
-                    width: 36,
-                    height: 36,
-                    fit: BoxFit.cover,
-                    fallback: fallback,
-                    placeholder: Container(
-                      decoration: BoxDecoration(
-                        color: colors.background,
-                        border: Border.all(
-                          color: colors.border,
-                          width: 1,
-                        ),
-                      ),
-                      child: Center(
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colors.primary,
+                        tag: 'asset_logo_$assetId',
+                        child: AssetRemoteImage(
+                          url: url,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                          fallback: fallback,
+                          placeholder: Container(
+                            decoration: BoxDecoration(
+                              color: colors.background,
+                              border: Border.all(
+                                color: colors.border,
+                                width: 1,
+                              ),
+                            ),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colors.primary,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             ),
           ),
 
-          // Badge – anchored to the bottom, constrained so it never spills
           if (badgeLabel != null && badgeColor != null && badgeIcon != null)
             Positioned(
               left: 0,
@@ -455,10 +431,6 @@ class _BadgeSpec {
   final IconData icon;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _PctBadge
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _PctBadge extends StatelessWidget {
   const _PctBadge({required this.pct, required this.color});
 
@@ -482,10 +454,6 @@ class _PctBadge extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _MiniSparkline
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _MiniSparkline extends StatelessWidget {
   const _MiniSparkline({required this.series, required this.color});
 
@@ -496,7 +464,6 @@ class _MiniSparkline extends StatelessWidget {
   Widget build(BuildContext context) {
     final valid = series.where((v) => v.isFinite).toList(growable: false);
     if (valid.length < 2) {
-      // Reserve space so the row doesn't collapse
       return const SizedBox(width: 30, height: 20);
     }
 
@@ -541,9 +508,12 @@ class _MiniSparklinePainter extends CustomPainter {
       final current = points[i];
       final controlX = (previous.dx + current.dx) / 2;
       path.cubicTo(
-        controlX, previous.dy,
-        controlX, current.dy,
-        current.dx, current.dy,
+        controlX,
+        previous.dy,
+        controlX,
+        current.dy,
+        current.dx,
+        current.dy,
       );
     }
 
@@ -558,10 +528,7 @@ class _MiniSparklinePainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            color.withValues(alpha: 0.18),
-            color.withValues(alpha: 0.0),
-          ],
+          colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0.0)],
         ).createShader(Offset.zero & size),
     );
 
@@ -580,10 +547,6 @@ class _MiniSparklinePainter extends CustomPainter {
   bool shouldRepaint(covariant _MiniSparklinePainter oldDelegate) =>
       oldDelegate.series != series || oldDelegate.color != color;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _TypeBadge
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _TypeBadge extends StatelessWidget {
   const _TypeBadge({
@@ -604,12 +567,11 @@ class _TypeBadge extends StatelessWidget {
     final bgTop = isStable
         ? accent.withValues(alpha: 0.16)
         : accent.withValues(alpha: 0.20);
-    final bgBottom =
-    isStable ? palette.surface : accent.withValues(alpha: 0.08);
+    final bgBottom = isStable
+        ? palette.surface
+        : accent.withValues(alpha: 0.08);
 
     return Container(
-      // Horizontal padding only; vertical padding is fixed so the badge
-      // height is predictable and never causes layout surprises.
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -630,7 +592,6 @@ class _TypeBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Icon dot
           SizedBox(
             width: 10,
             height: 10,
@@ -639,13 +600,10 @@ class _TypeBadge extends StatelessWidget {
                 color: accent.withValues(alpha: isStable ? 0.16 : 0.18),
                 shape: BoxShape.circle,
               ),
-              child: Center(
-                child: Icon(icon, size: 6, color: accent),
-              ),
+              child: Center(child: Icon(icon, size: 6, color: accent)),
             ),
           ),
           const SizedBox(width: 3),
-          // Label – FittedBox prevents text overflow inside the pill
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,

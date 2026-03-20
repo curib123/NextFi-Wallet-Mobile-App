@@ -61,7 +61,6 @@ class _MerchantProfileSetupScreenState
       _type = initial.type == MerchantType.business
           ? MerchantType.business
           : MerchantType.individual;
-      // Pre-fill country picker from saved value
       if (initial.country != null && initial.country!.isNotEmpty) {
         _tryPrefillCountry(initial.country!);
       }
@@ -89,15 +88,11 @@ class _MerchantProfileSetupScreenState
       if (!mounted) return;
       final q = value.trim().toLowerCase();
       final match = countries.firstWhere(
-        (c) =>
-            c.name.toLowerCase() == q ||
-            c.code.toLowerCase() == q,
+        (c) => c.name.toLowerCase() == q || c.code.toLowerCase() == q,
         orElse: () => CountryModel(name: value, code: '', flag: ''),
       );
       setState(() => _selectedCountry = match);
-    } catch (_) {
-      // Leave null â€” user can re-pick manually.
-    }
+    } catch (_) {}
   }
 
   Future<void> _submit() async {
@@ -162,8 +157,10 @@ class _MerchantProfileSetupScreenState
     final business = _type == MerchantType.business;
 
     if (displayName.isEmpty) return 'Display name is required.';
-    if (displayName.length < 2) return 'Display name must be at least 2 characters.';
-    if (displayName.length > 80) return 'Display name must be at most 80 characters.';
+    if (displayName.length < 2)
+      return 'Display name must be at least 2 characters.';
+    if (displayName.length > 80)
+      return 'Display name must be at most 80 characters.';
 
     if (requestNote.isNotEmpty && requestNote.length > 500) {
       return 'Request note must be at most 500 characters.';
@@ -193,7 +190,8 @@ class _MerchantProfileSetupScreenState
         return 'Registration number is invalid.';
       }
       if (businessAddress.isEmpty) return 'Business address is required.';
-      if (authorizedRep.isEmpty) return 'Authorized representative is required.';
+      if (authorizedRep.isEmpty)
+        return 'Authorized representative is required.';
       if (authorizedPosition.isEmpty) {
         return 'Representative position is required.';
       }
@@ -367,8 +365,7 @@ class _MerchantProfileSetupScreenState
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(c.onPrimary),
+                        valueColor: AlwaysStoppedAnimation<Color>(c.onPrimary),
                       ),
                     )
                   : const Text(
@@ -386,10 +383,6 @@ class _MerchantProfileSetupScreenState
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// COUNTRY PICKER FIELD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CountryPickerField extends StatelessWidget {
   const _CountryPickerField({
@@ -451,21 +444,23 @@ class _CountryPickerField extends StatelessWidget {
                     ),
             ),
             if (selected != null)
-              Icon(Icons.check_circle_outline_rounded,
-                  color: c.success, size: 17)
+              Icon(
+                Icons.check_circle_outline_rounded,
+                color: c.success,
+                size: 17,
+              )
             else
-              Icon(Icons.chevron_right_rounded,
-                  color: c.textSecondary.withValues(alpha: 0.45), size: 18),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: c.textSecondary.withValues(alpha: 0.45),
+                size: 18,
+              ),
           ],
         ),
       ),
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// COUNTRY PICKER SHEET
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CountryPickerSheet extends StatefulWidget {
   const _CountryPickerSheet({required this.c});
@@ -517,10 +512,12 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
       _filtered = q.isEmpty
           ? (_all ?? [])
           : (_all ?? [])
-              .where((c) =>
-                  c.name.toLowerCase().contains(q) ||
-                  c.code.toLowerCase().contains(q))
-              .toList();
+                .where(
+                  (c) =>
+                      c.name.toLowerCase().contains(q) ||
+                      c.code.toLowerCase().contains(q),
+                )
+                .toList();
     });
   }
 
@@ -570,8 +567,11 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                         color: c.border.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.close_rounded,
-                          size: 16, color: c.textSecondary),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: c.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -592,17 +592,22 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                   ),
                   filled: true,
                   fillColor: c.surface,
-                  prefixIcon: Icon(Icons.search_rounded,
-                      color: c.textSecondary, size: 20),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: c.textSecondary,
+                    size: 20,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
-                    borderSide:
-                        BorderSide(color: c.border.withValues(alpha: 0.25)),
+                    borderSide: BorderSide(
+                      color: c.border.withValues(alpha: 0.25),
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
-                    borderSide:
-                        BorderSide(color: c.border.withValues(alpha: 0.25)),
+                    borderSide: BorderSide(
+                      color: c.border.withValues(alpha: 0.25),
+                    ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
@@ -634,9 +639,10 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               Text(
                 'Could not load countries',
                 style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14),
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -681,15 +687,17 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 4),
       itemCount: _filtered.length,
-      separatorBuilder: (_, __) =>
-          Divider(height: 1, indent: 56, color: c.border.withValues(alpha: 0.12)),
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        indent: 56,
+        color: c.border.withValues(alpha: 0.12),
+      ),
       itemBuilder: (_, i) {
         final country = _filtered[i];
         return InkWell(
           onTap: () => Navigator.of(context).pop(country),
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
             child: Row(
               children: [
                 Text(country.flag, style: const TextStyle(fontSize: 22)),
@@ -721,10 +729,6 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// HERO
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _Hero extends StatelessWidget {
   const _Hero({required this.c});
   final AppColor c;
@@ -747,8 +751,7 @@ class _Hero extends StatelessWidget {
               color: c.primary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child:
-                Icon(Icons.storefront_outlined, color: c.primary, size: 22),
+            child: Icon(Icons.storefront_outlined, color: c.primary, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -766,10 +769,6 @@ class _Hero extends StatelessWidget {
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// TYPE SELECTOR
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _TypeSelector extends StatelessWidget {
   const _TypeSelector({
@@ -824,10 +823,6 @@ class _TypeSelector extends StatelessWidget {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// GENERIC FIELD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _Field extends StatelessWidget {
   const _Field({
     required this.c,
@@ -879,5 +874,3 @@ class _Field extends StatelessWidget {
     );
   }
 }
-
-

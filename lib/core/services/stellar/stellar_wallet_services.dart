@@ -1,4 +1,3 @@
-// lib/services/stellar/stellar_wallet_services.dart
 import 'dart:async';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -7,7 +6,6 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 import 'package:next_fi/core/services/stellar/wallet_models.dart';
 import 'package:next_fi/core/services/stellar/soroban_rpc.dart';
 
-// Import all sub-services
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_manager.dart';
 import 'package:next_fi/core/services/stellar/stellar_account_service.dart';
@@ -18,25 +16,12 @@ import 'package:next_fi/core/services/stellar/stellar_dex_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_fee_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_stream_service.dart';
 
-// Export base service types
 export 'package:next_fi/core/services/stellar/stellar_base_service.dart'
     show StellarWalletError, ProgressCallback;
 
-/// Production-ready Stellar wallet service with integrated activity logging.
-///
-/// **Facade Pattern** - Delegates to specialized sub-services organized by feature.
-/// Now includes automatic activity logging and user notifications for all operations.
-///
-/// Features:
-/// - Automatic activity logging for all blockchain operations
-/// - Real-time toast notifications
-/// - Progress tracking with user-friendly messages
-/// - Error handling with actionable advice
-/// - Transaction history and audit trail
 class StellarWalletServices {
   static const double defaultReceiverActivationXlm =
       StellarAccountService.fallbackAccountActivationMinXlm;
-  // Sub-services
   final StellarWalletManager walletManager;
   final StellarAccountService accountService;
   final StellarPaymentService paymentService;
@@ -46,7 +31,6 @@ class StellarWalletServices {
   final StellarFeeService feeService;
   final StellarStreamService streamService;
 
-  // Legacy properties for backwards compatibility
   final String usdcIssuer;
   final StellarSDK sdk;
 
@@ -253,9 +237,6 @@ class StellarWalletServices {
 
   bool get isTestnet => sdk == StellarSDK.TESTNET;
 
-  // MNEMONIC & WALLET MANAGEMENT
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
   Future<String> generateMnemonic12() => walletManager.generateMnemonic12();
   Future<String> generateMnemonic24() => walletManager.generateMnemonic24();
   Future<String> generateMnemonic({int wordCount = 12}) =>
@@ -309,10 +290,6 @@ class StellarWalletServices {
   Future<KeyPair?> getKeyPairFromStorage({String key = 'stellar_secret'}) =>
       walletManager.getKeyPairFromStorage(key: key);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // BALANCES & TRUSTLINES
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
   Future<double> getXlmBalance(String accountId) =>
       accountService.getXlmBalance(accountId);
   Future<double> getUsdcBalance(String accountId) =>
@@ -358,7 +335,6 @@ class StellarWalletServices {
     required Asset asset,
   }) => accountService.removeTrustline(keyPair: keyPair, asset: asset);
 
-  // Account Data
   Future<String> setAccountData({
     required KeyPair keyPair,
     required String key,
@@ -373,7 +349,6 @@ class StellarWalletServices {
     required String key,
   }) => accountService.getAccountData(accountId: accountId, key: key);
 
-  // Account Options
   Future<String> setAccountOptions({
     required KeyPair keyPair,
     String? homeDomain,
@@ -436,10 +411,6 @@ class StellarWalletServices {
   Future<Map<String, double>> getXlmBalanceBreakdown(String accountId) =>
       accountService.getXlmBalanceBreakdown(accountId);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // PAYMENTS WITH ACTIVITY LOGGING
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
   Future<String> sendXlm({
     required KeyPair keyPair,
     required String destination,
@@ -482,10 +453,6 @@ class StellarWalletServices {
     memoText: memoText,
     onProgress: onProgress,
   );
-
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // SWAPS WITH ACTIVITY LOGGING
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   Future<String> swapXlmToUsdc({
     required KeyPair keyPair,
@@ -538,10 +505,6 @@ class StellarWalletServices {
     memoText: memoText,
     onProgress: onProgress,
   );
-
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // CLAIMABLE BALANCES WITH ACTIVITY LOGGING
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   Future<String> createClaimableBalance({
     required KeyPair keyPair,
@@ -669,15 +632,6 @@ class StellarWalletServices {
     balanceId: balanceId,
   );
 
-  /// Ensures a receiver is ready for trade claimable settlement.
-  ///
-  /// Rules:
-  /// - XLM trades: if receiver account is brand-new, activate it first by
-  ///   sending a small XLM amount.
-  /// - Token trades (USDC/other): receiver account must already exist and must
-  ///   have the token trustline; no auto-activation for token flow.
-  ///
-  /// Returns `true` when activation payment was sent in this call.
   Future<bool> ensureReceiverReadyForClaimable({
     required KeyPair senderKeyPair,
     required String receiverId,
@@ -765,10 +719,6 @@ class StellarWalletServices {
         forceRefresh: forceRefresh,
       );
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // DEX TRADING
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
   Future<String> createSellOffer({
     required KeyPair keyPair,
     required Asset selling,
@@ -830,10 +780,6 @@ class StellarWalletServices {
     int limit = 20,
   }) => dexService.getOrderBook(selling: selling, buying: buying, limit: limit);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // FEE & QUOTES
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
   Future<String> getTransactionFeeAddress() => feeService.getSwapFeeAddress();
   Future<int> getCurrentFeeStroops() => feeService.getCurrentFeeStroops();
   Future<double> getCurrentFeeXlm() => feeService.getCurrentFeeXlm();
@@ -874,10 +820,6 @@ class StellarWalletServices {
       feeService.quoteXlmToUsdc(sendAmountXlm);
   Future<double?> quoteUsdcToXlm(double sendAmountUsdc) =>
       feeService.quoteUsdcToXlm(sendAmountUsdc);
-
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // STREAMS
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   Stream<PaymentOperationResponse> paymentsStream(String accountId) =>
       streamService.paymentsStream(accountId);

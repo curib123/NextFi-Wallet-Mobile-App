@@ -3,7 +3,6 @@ class ChatEndpoints {
   static const String friendsBase = '/friends';
   static const String encryptionBase = '/encryption-keys';
 
-  // Encryption Keys
   static String listMyKeys() => '$encryptionBase/me';
   static String upsertMyKey() => encryptionBase;
   static String deactivateMyKey(String keyId) =>
@@ -15,11 +14,8 @@ class ChatEndpoints {
   static String getMyKey(String keyId) => '$encryptionBase/$keyId';
   static String deleteMyKey(String keyId) => '$encryptionBase/$keyId';
 
-  // Friend Requests
-  /// Send a friend request (POST /friends/request)
   static String sendFriendRequest() => '$friendsBase/request';
 
-  /// List received friend requests (GET /friends/requests)
   static String listFriendRequests() => '$friendsBase/requests';
   static String listSentFriendRequests() => '$friendsBase/requests/sent';
   static String getFriendRequest(String requestId) =>
@@ -29,12 +25,10 @@ class ChatEndpoints {
   static String cancelFriendRequest(String requestId) =>
       '$friendsBase/requests/$requestId';
 
-  // Friends
   static String listFriends() => friendsBase;
   static String removeFriendship(String friendshipId) =>
       '$friendsBase/$friendshipId';
 
-  // Direct Messages - Thread Management
   static String createThread() => '$base/threads';
   static String listThreads() => '$base/threads';
   static String getThread(String threadId) => '$base/threads/$threadId';
@@ -43,7 +37,6 @@ class ChatEndpoints {
   static String openThreadWithFriend(String friendUserId) =>
       '$base/threads/with/$friendUserId';
 
-  // Direct Messages - Message Management
   static String listThreadMessages(String threadId) =>
       '$base/threads/$threadId/messages';
   static String sendThreadMessage(String threadId) =>

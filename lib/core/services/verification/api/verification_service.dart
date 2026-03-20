@@ -74,11 +74,9 @@ class VerificationService {
         return VerificationModel.fromJson(map);
       }
     } on ApiException catch (e) {
-      // First-time users may not have a verification row yet.
       if (e.statusCode != 404) rethrow;
     }
 
-    // First-time fallback: treat missing/empty response as BASIC.
     return const VerificationModel(
       id: '',
       userId: '',
@@ -87,12 +85,10 @@ class VerificationService {
   }
 
   Future<VerificationModel> submit({
-    // ── Required ──────────────────────────────────────────
     required String phoneNumber,
     required File selfie,
     required File governmentIdFront,
     required File governmentIdBack,
-    // ── Identity snapshot ─────────────────────────────────
     String? fullLegalName,
     DateTime? dateOfBirth,
     String? nationality,
@@ -103,13 +99,10 @@ class VerificationService {
     String? stateOrProvince,
     String? postalCode,
     String? issuingCountry,
-    // ── Government ID ─────────────────────────────────────
     GovernmentIdType? governmentIdType,
     String? governmentIdNumber,
     DateTime? governmentIdExpiry,
-    // ── Payment account ───────────────────────────────────
     String? paymentAccountId,
-    // ── Consent ───────────────────────────────────────────
     DateTime? consentAcceptedAt,
     String? consentVersion,
   }) async {
@@ -143,7 +136,6 @@ class VerificationService {
           )
           ..headers['Authorization'] = 'Bearer $token'
           ..headers['Accept'] = 'application/json'
-          // ── Required fields ───────────────────────────────
           ..fields['phoneNumber'] = normalizedPhone
           ..files.add(await http.MultipartFile.fromPath('selfie', selfie.path))
           ..files.add(
@@ -159,7 +151,6 @@ class VerificationService {
             ),
           );
 
-    // ── Identity snapshot ─────────────────────────────────
     _addField(req, 'fullLegalName', fullLegalName);
     _addField(
       req,
@@ -179,7 +170,6 @@ class VerificationService {
     _addField(req, 'postalCode', postalCode);
     _addField(req, 'issuingCountry', issuingCountry);
 
-    // ── Government ID ─────────────────────────────────────
     _addField(req, 'governmentIdType', governmentIdType?.apiValue);
     _addField(req, 'governmentIdNumber', governmentIdNumber);
     _addField(
@@ -192,10 +182,8 @@ class VerificationService {
           : null,
     );
 
-    // ── Payment account ───────────────────────────────────
     _addField(req, 'paymentAccountId', paymentAccountId);
 
-    // ── Consent ───────────────────────────────────────────
     _addField(
       req,
       'consentAcceptedAt',
@@ -364,8 +352,6 @@ class VerificationService {
     );
   }
 
-  /// Adds a field to a [MultipartRequest] only when [value] is non-null
-  /// and non-blank, keeping the request clean.
   void _addField(http.MultipartRequest req, String key, String? value) {
     final trimmed = value?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {

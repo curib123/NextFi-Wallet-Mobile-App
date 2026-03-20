@@ -1,10 +1,8 @@
-// lib/features/seed_phrase/view/widgets/confirm_tile.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
-/// Clean confirmation checkbox tile
 class ConfirmTile extends StatelessWidget {
   const ConfirmTile({
     super.key,
@@ -34,9 +32,7 @@ class ConfirmTile extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: value
-              ? accent.withValues(alpha: 0.08)
-              : colors.surface,
+          color: value ? accent.withValues(alpha: 0.08) : colors.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: value
@@ -47,7 +43,6 @@ class ConfirmTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Checkbox
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 24,
@@ -61,15 +56,10 @@ class ConfirmTile extends StatelessWidget {
                 ),
               ),
               child: value
-                  ? Icon(
-                LucideIcons.check,
-                color: colors.onPrimary,
-                size: 16,
-              )
+                  ? Icon(LucideIcons.check, color: colors.onPrimary, size: 16)
                   : null,
             ),
             const SizedBox(width: 12),
-            // Icon
             Container(
               width: 40,
               height: 40,
@@ -86,7 +76,6 @@ class ConfirmTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            // Text
             Expanded(
               child: Text(
                 title,
@@ -104,4 +93,3 @@ class ConfirmTile extends StatelessWidget {
     );
   }
 }
-

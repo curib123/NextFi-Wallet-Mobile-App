@@ -1,4 +1,3 @@
-// lib/common/components/security_pin_sheet.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
@@ -8,12 +7,6 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
 
-/// Open the modal. Returns true if changed/created, false/null if cancelled.
-///
-/// Flow:
-/// - If a PIN exists â†’ show a Verify PIN sheet first.
-///   - On success â†’ open the Change PIN sheet (no "old PIN" field).
-/// - If no PIN exists â†’ open the Create PIN sheet directly.
 Future<bool?> showPinChangeBottomSheet(BuildContext context) async {
   final hasPin = await SecurityStorage.hasPin();
   if (!context.mounted) return null;
@@ -38,9 +31,6 @@ Future<bool?> showPinChangeBottomSheet(BuildContext context) async {
   );
 }
 
-/// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-/// VERIFY CURRENT PIN (single-field gate)
-/// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _VerifyCurrentPinSheet extends StatefulWidget {
   const _VerifyCurrentPinSheet();
 
@@ -213,11 +203,9 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Handle
                   _buildHandle(colors),
                   const SizedBox(height: 8),
 
-                  // Header
                   _buildHeader(
                     colors,
                     icon: LucideIcons.shieldCheck,
@@ -227,13 +215,11 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
                   ),
                   const SizedBox(height: 20),
 
-                  // Lockout warning
                   if (isLockedOut)
                     _buildLockoutWarning(colors, _lockoutRemaining!),
 
                   if (isLockedOut) const SizedBox(height: 16),
 
-                  // PIN input
                   _buildPinInput(
                     colors,
                     controller: _pinC,
@@ -246,7 +232,6 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
 
                   const SizedBox(height: 24),
 
-                  // Actions
                   Row(
                     children: [
                       Expanded(
@@ -285,9 +270,6 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
   }
 }
 
-/// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-/// CHANGE / CREATE PIN
-/// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _PinChangeSheet extends StatefulWidget {
   const _PinChangeSheet({this.preAuthed = false});
   final bool preAuthed;
@@ -466,11 +448,9 @@ class _PinChangeSheetState extends State<_PinChangeSheet>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Handle
                     _buildHandle(colors),
                     const SizedBox(height: 8),
 
-                    // Header
                     _buildHeader(
                       colors,
                       icon: LucideIcons.shield,
@@ -482,11 +462,9 @@ class _PinChangeSheetState extends State<_PinChangeSheet>
                     ),
                     const SizedBox(height: 20),
 
-                    // Security tips
                     _buildSecurityTips(colors),
                     const SizedBox(height: 20),
 
-                    // New PIN
                     _buildPinInput(
                       colors,
                       controller: _newC,
@@ -499,7 +477,6 @@ class _PinChangeSheetState extends State<_PinChangeSheet>
                     ),
                     const SizedBox(height: 14),
 
-                    // Confirm PIN
                     _buildPinInput(
                       colors,
                       controller: _confirmC,
@@ -514,7 +491,6 @@ class _PinChangeSheetState extends State<_PinChangeSheet>
 
                     const SizedBox(height: 24),
 
-                    // Actions
                     Row(
                       children: [
                         Expanded(
@@ -553,10 +529,6 @@ class _PinChangeSheetState extends State<_PinChangeSheet>
     );
   }
 }
-
-/// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-/// Reusable UI Components
-/// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 Widget _buildHandle(AppColor colors) {
   return Container(

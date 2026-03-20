@@ -65,7 +65,6 @@ class ChatCoreService {
   Future<bool> removeFriendship(String friendshipId) async =>
       _api.removeFriendship(friendshipId);
 
-  // Backward compatibility aliases
   Future<ChatPaged<ChatFriendRequestModel>> listIncomingFriendRequests(
     ChatListQuery query,
   ) async => _api.listFriendRequests(query);
@@ -104,9 +103,8 @@ class ChatCoreService {
     SendEncryptedChatMessageRequest req,
   ) async => _api.sendThreadMessage(threadId, req);
 
-  Future<ChatDirectThreadModel> createThread(
-    CreateThreadRequest req,
-  ) async => _api.createThread(req);
+  Future<ChatDirectThreadModel> createThread(CreateThreadRequest req) async =>
+      _api.createThread(req);
 
   Future<ChatDirectThreadModel> getThread(String threadId) async =>
       _api.getThread(threadId);

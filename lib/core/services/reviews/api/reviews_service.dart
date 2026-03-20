@@ -7,7 +7,6 @@ import '../models/reviews_dtos.dart';
 import '../models/reviews_models.dart';
 import 'reviews_endpoints.dart';
 
-/// Reviews HTTP helper
 class ReviewsHttp {
   static Uri uri(String path, {Map<String, String>? queryParams}) {
     final base = Uri.parse('$centralizedBaseUrl$path');
@@ -27,12 +26,9 @@ class ReviewsHttp {
   }
 }
 
-/// Reviews API service
 class ReviewsService {
-  ReviewsService({
-    required this.tokenProvider,
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  ReviewsService({required this.tokenProvider, http.Client? client})
+    : _client = client ?? http.Client();
 
   final Future<String?> Function() tokenProvider;
   final http.Client _client;
@@ -59,8 +55,6 @@ class ReviewsService {
   };
 
   Future<Map<String, String>> _publicHeaders() async {
-    // Public reviews route should not depend on JWT validity.
-    // Sending an expired/invalid token can cause avoidable 401s.
     return const {'Content-Type': 'application/json'};
   }
 
@@ -186,7 +180,6 @@ class ReviewsService {
     );
   }
 
-  /// Get public reviews for a user
   Future<ReviewsPagedResponse> getUserReviewsPaged({
     required String userId,
     ReviewsListQuery query = const ReviewsListQuery(),
@@ -208,7 +201,6 @@ class ReviewsService {
     return ReviewsPagedResponse(items: items, meta: meta);
   }
 
-  /// Get list of reviews for a user (non-paginated)
   Future<List<ReviewModel>> getUserReviews({
     required String userId,
     ReviewsListQuery query = const ReviewsListQuery(),
@@ -217,7 +209,6 @@ class ReviewsService {
     return page.items;
   }
 
-  /// Get public reviews for an offer
   Future<ReviewsPagedResponse> getOfferReviewsPaged({
     required String offerId,
     ReviewsListQuery query = const ReviewsListQuery(),
@@ -239,7 +230,6 @@ class ReviewsService {
     return ReviewsPagedResponse(items: items, meta: meta);
   }
 
-  /// Get list of reviews for an offer (non-paginated)
   Future<List<ReviewModel>> getOfferReviews({
     required String offerId,
     ReviewsListQuery query = const ReviewsListQuery(),
@@ -248,19 +238,16 @@ class ReviewsService {
     return page.items;
   }
 
-  /// Get average rating for a user
   Future<double?> getUserAverageRating(String userId) async {
     final summary = await getUserRatingSummary(userId);
     return summary.averageRating;
   }
 
-  /// Get review count for a user
   Future<int> getUserReviewCount(String userId) async {
     final summary = await getUserRatingSummary(userId);
     return summary.reviewCount;
   }
 
-  /// Get rating summary for a user using paginated public endpoint.
   Future<UserRatingSummary> getUserRatingSummary(String userId) async {
     try {
       final first = await getUserReviewsPaged(
@@ -287,13 +274,15 @@ class ReviewsService {
       if (count == 0) {
         return const UserRatingSummary(averageRating: null, reviewCount: 0);
       }
-      return UserRatingSummary(averageRating: total / count, reviewCount: count);
+      return UserRatingSummary(
+        averageRating: total / count,
+        reviewCount: count,
+      );
     } catch (_) {
       return const UserRatingSummary(averageRating: null, reviewCount: 0);
     }
   }
 
-  /// Get rating summary for an offer using paginated public endpoint.
   Future<UserRatingSummary> getOfferRatingSummary(String offerId) async {
     try {
       final first = await getOfferReviewsPaged(
@@ -320,13 +309,15 @@ class ReviewsService {
       if (count == 0) {
         return const UserRatingSummary(averageRating: null, reviewCount: 0);
       }
-      return UserRatingSummary(averageRating: total / count, reviewCount: count);
+      return UserRatingSummary(
+        averageRating: total / count,
+        reviewCount: count,
+      );
     } catch (_) {
       return const UserRatingSummary(averageRating: null, reviewCount: 0);
     }
   }
 
-  /// Create a new review (authenticated)
   Future<ReviewModel> create(CreateReviewRequest req) async {
     final res = await _client.post(
       ReviewsHttp.uri(ReviewsEndpoints.create()),
@@ -340,7 +331,6 @@ class ReviewsService {
     throw Exception('Unexpected response for POST /reviews');
   }
 
-  /// Get current user's reviews (authenticated)
   Future<ReviewsPagedResponse> getMyReviewsPaged({
     ReviewsListQuery query = const ReviewsListQuery(),
   }) async {

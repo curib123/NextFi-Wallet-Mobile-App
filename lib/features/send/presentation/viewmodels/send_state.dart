@@ -28,13 +28,8 @@ class SendControllerArgs {
   }
 
   @override
-  int get hashCode => Object.hash(
-    address,
-    assetId,
-    balance,
-    prefillAddress,
-    prefillName,
-  );
+  int get hashCode =>
+      Object.hash(address, assetId, balance, prefillAddress, prefillName);
 }
 
 class SendState {
@@ -206,7 +201,8 @@ class SendState {
       recipientLoading: recipientLoading ?? this.recipientLoading,
       federationLoading: federationLoading ?? this.federationLoading,
       federationDomain: federationDomain ?? this.federationDomain,
-      federationSuggestions: federationSuggestions ?? this.federationSuggestions,
+      federationSuggestions:
+          federationSuggestions ?? this.federationSuggestions,
       asset: asset ?? this.asset,
       accountId: identical(accountId, _sentinel)
           ? this.accountId

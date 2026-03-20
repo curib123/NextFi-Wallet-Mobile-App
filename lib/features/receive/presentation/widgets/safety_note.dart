@@ -1,4 +1,3 @@
-// lib/features/receive/view/widgets/safety_note.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
@@ -24,7 +23,11 @@ class SafetyNote extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.35),
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 13,
+                height: 1.35,
+              ),
             ),
           ),
         ],
@@ -32,4 +35,3 @@ class SafetyNote extends StatelessWidget {
     );
   }
 }
-

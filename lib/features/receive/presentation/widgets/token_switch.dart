@@ -1,4 +1,3 @@
-// lib/features/receive/view/widgets/token_switch.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
@@ -44,18 +43,23 @@ class TokenSwitch extends StatelessWidget {
 }
 
 class TokenSwitchItem {
-  const TokenSwitchItem({
-    required this.key,
-    required this.label,
-  });
+  const TokenSwitchItem({required this.key, required this.label});
 
   final String key;
   final String label;
 }
 
 class _SegmentButton extends StatelessWidget {
-  const _SegmentButton({required this.label, required this.selected, required this.onTap, required this.color});
-  final String label; final bool selected; final VoidCallback onTap; final AppColor color;
+  const _SegmentButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.color,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final AppColor color;
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +89,14 @@ class _SegmentButton extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Center(
-              child: Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w800, letterSpacing: 0.2)),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: fg,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.2,
+                ),
+              ),
             ),
           ),
         ),
@@ -93,4 +104,3 @@ class _SegmentButton extends StatelessWidget {
     );
   }
 }
-

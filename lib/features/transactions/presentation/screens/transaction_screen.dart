@@ -376,5 +376,3 @@ class _TransactionScreenState extends ConsumerState<TransactionScreen> {
     );
   }
 }
-
-

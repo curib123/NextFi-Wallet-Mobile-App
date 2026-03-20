@@ -19,10 +19,7 @@ class ReceiveFederationService {
     return FederationAddressCoreService.I.create(request);
   }
 
-  Future<void> update(
-    String id,
-    UpdateFederationAddressRequest request,
-  ) {
+  Future<void> update(String id, UpdateFederationAddressRequest request) {
     return FederationAddressCoreService.I.update(id, request);
   }
 }

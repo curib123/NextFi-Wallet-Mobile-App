@@ -1,4 +1,3 @@
-// lib/Screen/WalletHomeScreenWidgets/modals/reserve_balance_modal.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -48,7 +47,6 @@ void showReserveBalanceModal(
           ),
           const SizedBox(height: 20),
 
-          // Total Balance Section
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -213,7 +211,6 @@ void showReserveBalanceModal(
 
           const SizedBox(height: 16),
 
-          // Reserve Breakdown Section
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -266,7 +263,6 @@ void showReserveBalanceModal(
 
           const SizedBox(height: 16),
 
-          // Info Box
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(

@@ -8,7 +8,9 @@ class OffersCoreService {
 
   static final OffersCoreService I = OffersCoreService._();
 
-  late final OffersService _api = OffersService(tokenProvider: _safeTokenProvider);
+  late final OffersService _api = OffersService(
+    tokenProvider: _safeTokenProvider,
+  );
 
   static Future<String?> _safeTokenProvider() async {
     try {
@@ -19,7 +21,6 @@ class OffersCoreService {
     }
   }
 
-  // Public routes
   Future<OffersPagedResponse> listPublicPaged({
     OffersListQuery query = const OffersListQuery(),
   }) async => _api.listPublicPaged(query: query);
@@ -30,7 +31,6 @@ class OffersCoreService {
 
   Future<OfferModel> getPublicById(String id) async => _api.getPublicById(id);
 
-  // Merchant routes
   Future<OfferModel> create(CreateOfferRequest req) async => _api.create(req);
 
   Future<OfferModel> update(String id, UpdateOfferRequest req) async =>
@@ -50,7 +50,6 @@ class OffersCoreService {
     OffersListQuery query = const OffersListQuery(),
   }) async => _api.listMine(query: query);
 
-  // Admin routes
   Future<OffersPagedResponse> listAdminPaged({
     OffersListQuery query = const OffersListQuery(),
   }) async => _api.listAdminPaged(query: query);

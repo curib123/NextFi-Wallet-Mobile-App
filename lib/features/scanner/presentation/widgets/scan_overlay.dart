@@ -201,4 +201,3 @@ class _OverlayPainter extends CustomPainter {
         oldDelegate.colors.primary != colors.primary;
   }
 }
-

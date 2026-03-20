@@ -1,14 +1,3 @@
-// lib/services/device_meta/device_meta_service.dart
-//
-// Simple class you can call to get deviceId/platform/appVersion.
-// No constructor args needed.
-//
-// pubspec.yaml:
-//   device_info_plus: ^10.1.0
-//   package_info_plus: ^8.0.0
-//   flutter_secure_storage: ^9.2.2
-//   uuid: ^4.4.0
-
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
@@ -18,8 +7,8 @@ import 'package:uuid/uuid.dart';
 
 class DeviceMeta {
   final String deviceId;
-  final String platform;   // android | ios | web
-  final String appVersion; // 1.2.3+45
+  final String platform;
+  final String appVersion;
 
   const DeviceMeta({
     required this.deviceId,
@@ -43,7 +32,6 @@ class DeviceMetaService {
 
   DeviceMeta? _cached;
 
-  /// Call this once and reuse the returned meta (cached).
   Future<DeviceMeta> getMeta({bool forceRefresh = false}) async {
     if (!forceRefresh && _cached != null) return _cached!;
 
@@ -51,15 +39,12 @@ class DeviceMetaService {
     final plat = _platform;
     final ver = await _appVersion;
 
-    // optional warm-up (safe)
     await _warmDeviceInfo(plat);
 
     final m = DeviceMeta(deviceId: id, platform: plat, appVersion: ver);
     _cached = m;
     return m;
   }
-
-  // ───────────────────────── internals ─────────────────────────
 
   Future<String> _getOrCreateInstallId() async {
     final existing = await _secure.read(key: _deviceIdKey);

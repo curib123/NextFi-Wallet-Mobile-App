@@ -30,8 +30,6 @@ class MerchantPaymentAccountService {
     };
   }
 
-  // ── Envelope extraction ──────────────────────────────────────────────────────
-
   Map<String, dynamic>? _extractMap(dynamic data) {
     if (data == null || data == '') return null;
     if (data is String && data.trim().toLowerCase() == 'null') return null;
@@ -86,9 +84,6 @@ class MerchantPaymentAccountService {
     );
   }
 
-  // ── Endpoints ────────────────────────────────────────────────────────────────
-
-  /// GET /merchant-payment-accounts
   Future<MerchantPaymentAccountPagedResponse> listPaged({
     MerchantPaymentAccountListQuery query =
         const MerchantPaymentAccountListQuery(),
@@ -110,7 +105,6 @@ class MerchantPaymentAccountService {
     );
   }
 
-  /// GET /merchant-payment-accounts/:id
   Future<MerchantPaymentAccountModel> getOne(String id) async {
     final res = await _client.get(
       MerchantPaymentAccountHttp.uri(
@@ -129,7 +123,6 @@ class MerchantPaymentAccountService {
     );
   }
 
-  /// POST /merchant-payment-accounts
   Future<MerchantPaymentAccountModel> create(
     CreateMerchantPaymentAccountRequest req,
   ) async {
@@ -149,7 +142,6 @@ class MerchantPaymentAccountService {
     );
   }
 
-  /// PATCH /merchant-payment-accounts/:id
   Future<MerchantPaymentAccountModel> update(
     String id,
     UpdateMerchantPaymentAccountRequest req,
@@ -172,7 +164,6 @@ class MerchantPaymentAccountService {
     );
   }
 
-  /// PATCH /merchant-payment-accounts/:id/toggle  — flip the isActive flag.
   Future<MerchantPaymentAccountModel> toggle(String id) async {
     final res = await _client.patch(
       MerchantPaymentAccountHttp.uri(
@@ -191,7 +182,6 @@ class MerchantPaymentAccountService {
     );
   }
 
-  /// DELETE /merchant-payment-accounts/:id
   Future<bool> remove(String id) async {
     final res = await _client.delete(
       MerchantPaymentAccountHttp.uri(

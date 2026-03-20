@@ -1,4 +1,3 @@
-// lib/features/price_chart/view_model/price_chart_vm.dart
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
@@ -8,12 +7,8 @@ import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_state.dart';
 
 class PriceChartVM extends ChangeNotifier {
-  PriceChartVM(
-    this._currency,
-    this._assets, {
-    String initialAssetKey = '',
-  }) : _selectedAssetKey = initialAssetKey {
-    // Relay CurrencyVM updates so the chart refreshes automatically.
+  PriceChartVM(this._currency, this._assets, {String initialAssetKey = ''})
+    : _selectedAssetKey = initialAssetKey {
     _currencyListener = () => notifyListeners();
     _currency.addListener(_currencyListener);
     _assetListener = () => notifyListeners();
@@ -30,14 +25,13 @@ class PriceChartVM extends ChangeNotifier {
   AssetModel? get selectedAsset =>
       _assets.findAsset(_selectedAssetKey) ??
       _assets.findAsset(_selectedAssetKey.toUpperCase());
-  AssetModel? get _fallbackAsset =>
-      _assets.assets.cast<AssetModel?>().firstWhere(
-        (asset) => asset != null,
-        orElse: () => null,
-      );
+  AssetModel? get _fallbackAsset => _assets.assets
+      .cast<AssetModel?>()
+      .firstWhere((asset) => asset != null, orElse: () => null);
   AssetModel? get activeAsset => selectedAsset ?? _fallbackAsset;
-  List<AssetModel> get availableAssets =>
-      _assets.assets.where(_currency.supportsAssetPricing).toList(growable: false);
+  List<AssetModel> get availableAssets => _assets.assets
+      .where(_currency.supportsAssetPricing)
+      .toList(growable: false);
 
   PriceChartRange _range = PriceChartRange.h24;
   PriceChartRange get range => _range;
@@ -45,9 +39,8 @@ class PriceChartVM extends ChangeNotifier {
   int? _hoverIndex;
   int? get hoverIndex => _hoverIndex;
 
-  // Hovered price in FIAT from the *display* series
   double? _hoveredFiat;
-  double? get hoveredPrice => _hoveredFiat; // keep original getter name for compatibility
+  double? get hoveredPrice => _hoveredFiat;
 
   void setAsset(String assetKey) {
     final normalized = assetKey.trim();
@@ -77,8 +70,6 @@ class PriceChartVM extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ===== Raw series from CurrencyVM (no conversion) =====
-
   List<double> get series {
     final asset = activeAsset;
     if (asset == null) return const [];
@@ -96,7 +87,6 @@ class PriceChartVM extends ChangeNotifier {
     }
   }
 
-  // Provide the same "ALL" fallback behavior your card was using
   List<double> get _seriesWithFallback {
     if (_range == PriceChartRange.all && series.length < 2) {
       final asset = activeAsset;
@@ -106,10 +96,7 @@ class PriceChartVM extends ChangeNotifier {
     return series;
   }
 
-  /// Fiat display series used by header & hover (prevents double conversion).
   List<double> get displaySeries => List<double>.from(_seriesWithFallback);
-
-  // ===== Header helpers =====
 
   double get pct {
     final asset = activeAsset;
@@ -140,8 +127,6 @@ class PriceChartVM extends ChangeNotifier {
     return _currency.assetUnitPriceFiat(asset);
   }
 
-  /// Always prefer the live ticker for "current price" so it stays fresh.
-  /// If live isnÃ¢â‚¬â„¢t available/finite/positive, fall back to the chart series.
   double get priceNow {
     final live = _liveFiatNow;
     if (live.isFinite && live > 0) return live;
@@ -150,8 +135,6 @@ class PriceChartVM extends ChangeNotifier {
     if (ds.isNotEmpty && ds.last.isFinite) return ds.last;
     return 0.0;
   }
-
-  // ===== Time labels aligned with displaySeries length =====
 
   List<String> get timeLabels {
     final n = displaySeries.length;
@@ -173,21 +156,29 @@ class PriceChartVM extends ChangeNotifier {
 
   static Duration _windowForRange(PriceChartRange r) {
     switch (r) {
-      case PriceChartRange.h24: return const Duration(hours: 24);
-      case PriceChartRange.w1:  return const Duration(days: 7);
-      case PriceChartRange.m1:  return const Duration(days: 30);
-      case PriceChartRange.y1:  return const Duration(days: 365);
-      case PriceChartRange.all: return const Duration(days: 365); // adjust if you have a real "all" span
+      case PriceChartRange.h24:
+        return const Duration(hours: 24);
+      case PriceChartRange.w1:
+        return const Duration(days: 7);
+      case PriceChartRange.m1:
+        return const Duration(days: 30);
+      case PriceChartRange.y1:
+        return const Duration(days: 365);
+      case PriceChartRange.all:
+        return const Duration(days: 365);
     }
   }
 
   static DateFormat _formatForRange(PriceChartRange r) {
     switch (r) {
-      case PriceChartRange.h24: return DateFormat('h:mm a');   // hours
-      case PriceChartRange.w1:  // days
-      case PriceChartRange.m1:  return DateFormat('MMM d');
-      case PriceChartRange.y1:  // months
-      case PriceChartRange.all:return DateFormat('MMM yyyy');
+      case PriceChartRange.h24:
+        return DateFormat('h:mm a');
+      case PriceChartRange.w1:
+      case PriceChartRange.m1:
+        return DateFormat('MMM d');
+      case PriceChartRange.y1:
+      case PriceChartRange.all:
+        return DateFormat('MMM yyyy');
     }
   }
 
@@ -198,4 +189,3 @@ class PriceChartVM extends ChangeNotifier {
     super.dispose();
   }
 }
-

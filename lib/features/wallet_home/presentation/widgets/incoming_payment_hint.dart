@@ -1,4 +1,3 @@
-// lib/Screen/WalletHomeScreenWidgets/incoming_payment_hints.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +8,6 @@ import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-/// Minimalist incoming payment hint with clean modern design
 Widget incomingPaymentHint(
   Map<String, dynamic> tx,
   String me, {
@@ -31,7 +29,6 @@ Widget incomingPaymentHint(
         tx['createdAt'] ?? tx['created_at'] ?? tx['timestamp'] ?? tx['time'],
       );
 
-      // Check if this creates a new trustline (reserve impact)
       final isNewAsset =
           walletState != null &&
           symbol != 'XLM' &&
@@ -251,7 +248,6 @@ Widget activeTradeRoomHint(
   );
 }
 
-// Enhanced bottom sheet with clean minimal design
 void _showTxDetailsSheet(
   BuildContext context,
   Map<String, dynamic> tx,
@@ -302,7 +298,6 @@ void _showTxDetailsSheet(
             ),
           ),
 
-          // Header
           Row(
             children: [
               Container(
@@ -348,7 +343,6 @@ void _showTxDetailsSheet(
 
           const SizedBox(height: 20),
 
-          // Details
           _flatRow(ctx, 'From', _short(from), fullValue: from, colors: colors),
           _divider(colors),
           _flatRow(
@@ -363,7 +357,6 @@ void _showTxDetailsSheet(
           _divider(colors),
           _flatRow(ctx, 'TxID', _short(txId), fullValue: txId, colors: colors),
 
-          // Reserve impact
           if (reserveImpact > 0) ...[
             const SizedBox(height: 16),
             Container(
@@ -411,7 +404,6 @@ void _showTxDetailsSheet(
 
           const SizedBox(height: 20),
 
-          // Mark as received button
           SizedBox(
             width: double.infinity,
             child: AppElevatedButton.icon(
@@ -516,7 +508,6 @@ Widget _flatRow(
   );
 }
 
-// Helper functions
 String _randKey() => DateTime.now().microsecondsSinceEpoch.toString();
 
 int _parseMillis(dynamic v) {
@@ -573,11 +564,8 @@ String _resolveSymbol(dynamic assetCode, String assetType) {
 }
 
 bool _hasExistingTrustline(WalletHomeState state, String assetCode) {
-  // Check common assets
   if (assetCode == 'XLM') return true;
   if (assetCode == 'USDC') return state.trustlineCount > 0;
 
-  // For uncommon assets, assume it's new if trustline count is low
   return false;
 }
-

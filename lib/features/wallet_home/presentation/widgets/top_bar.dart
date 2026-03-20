@@ -95,7 +95,9 @@ class _TopBarState extends ConsumerState<TopBar> with WidgetsBindingObserver {
                 );
               }
               if (!mounted) return;
-              await ref.read(topBarProfileControllerProvider.notifier).refresh();
+              await ref
+                  .read(topBarProfileControllerProvider.notifier)
+                  .refresh();
             },
           ),
         ],
@@ -317,5 +319,3 @@ class _ProfileActionButton extends StatelessWidget {
     );
   }
 }
-
-

@@ -1,9 +1,7 @@
-// lib/features/seed_phrase/view/widgets/word_picker.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
-/// Clean, minimal word count selector
 class WordCountPicker extends StatelessWidget {
   final int current;
   final bool loading;
@@ -37,10 +35,12 @@ class WordCountPicker extends StatelessWidget {
 
     return Expanded(
       child: GestureDetector(
-        onTap: isEnabled ? () {
-          HapticFeedback.selectionClick();
-          onPick(count);
-        } : null,
+        onTap: isEnabled
+            ? () {
+                HapticFeedback.selectionClick();
+                onPick(count);
+              }
+            : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -68,4 +68,3 @@ class WordCountPicker extends StatelessWidget {
     );
   }
 }
-

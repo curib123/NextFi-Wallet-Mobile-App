@@ -1,13 +1,9 @@
-// stellar_swap_service.dart
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/stellar/stellar_account_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_fee_service.dart';
 
-/// Service for path payments (swaps).
-///
-/// Swap fee policy is loaded from backend fee config and deducted from input.
 class StellarSwapService extends StellarBaseService {
   static const double _safetyBufferXlm = 0.0002;
 
@@ -34,7 +30,8 @@ class StellarSwapService extends StellarBaseService {
   }
 
   Future<double> _trustlineReserveXlm() async {
-    final activationMin = await accountService.getLatestAccountActivationMinXlm();
+    final activationMin = await accountService
+        .getLatestAccountActivationMinXlm();
     return activationMin > 0 ? activationMin / 2.0 : 0.5;
   }
 
@@ -162,7 +159,8 @@ class StellarSwapService extends StellarBaseService {
       final dest = (destination?.trim().isNotEmpty == true)
           ? toClassicAccountId(destination!.trim())
           : self;
-      final needsReceiverTrustline = dest == self &&
+      final needsReceiverTrustline =
+          dest == self &&
           receiving is! AssetTypeNative &&
           !await accountService.hasTrustline(self, receiving);
 

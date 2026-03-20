@@ -1,4 +1,3 @@
-// lib/features/wallet_settings/model/wallet_settings_state.dart
 class WalletSettingsState {
   final String? activeWalletId;
   final String walletName;
@@ -7,8 +6,8 @@ class WalletSettingsState {
   final List<String> words;
 
   final bool loading;
-  final bool obscured;     // hidden until authentication succeeds
-  final bool authorized;   // set true after AuthGate goNext
+  final bool obscured;
+  final bool authorized;
   final String? error;
 
   const WalletSettingsState({
@@ -33,7 +32,7 @@ class WalletSettingsState {
     bool? loading,
     bool? obscured,
     bool? authorized,
-    String? error, // set '' to clear
+    String? error,
   }) {
     return WalletSettingsState(
       activeWalletId: activeWalletId ?? this.activeWalletId,

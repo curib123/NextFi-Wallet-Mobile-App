@@ -104,10 +104,7 @@ class AppModalBase extends StatelessWidget {
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
-                  Flexible(
-                    fit: FlexFit.loose,
-                    child: child,
-                  ),
+                  Flexible(fit: FlexFit.loose, child: child),
                 ],
               ),
             ),

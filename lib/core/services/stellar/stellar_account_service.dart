@@ -1,4 +1,3 @@
-// stellar_account_service.dart
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -6,7 +5,6 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 
-/// Service for account management, balances, trustlines, and account options
 class StellarAccountService extends StellarBaseService {
   final String usdcIssuer;
   static const double fallbackAccountActivationMinXlm = 1.0;
@@ -32,20 +30,10 @@ class StellarAccountService extends StellarBaseService {
     return 'asset';
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Reserve Calculation (Stellar Protocol)
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Network base reserve reference used for local reserve math.
-  /// Fallback value: 0.5 XLM base reserve => 1.0 XLM minimum account reserve.
   static const double _baseReserve = 0.5;
 
-  /// Each subentry (trustline/offer/signer/data) adds one base reserve.
   static const double _subentryReserve = _baseReserve;
 
-  /// Minimum account balance = (2 + numSubEntries) * baseReserve
-  /// Includes sponsorship deltas:
-  /// (2 + numSubEntries + numSponsoring - numSponsored) * baseReserve.
   double _calculateMinimumBalance(
     AccountResponse account, {
     double? baseReserve,
@@ -65,13 +53,11 @@ class StellarAccountService extends StellarBaseService {
     return minimumBalance;
   }
 
-  /// Calculate spendable XLM balance (total - minimum reserve - selling liabilities)
   double _calculateSpendableXlm(
     AccountResponse account, {
     double? baseReserve,
     double? subentryReserve,
   }) {
-    // Get total XLM balance
     double totalXlm = 0.0;
     double sellingLiabilities = 0.0;
 
@@ -79,27 +65,23 @@ class StellarAccountService extends StellarBaseService {
       if (balance.assetType == Asset.TYPE_NATIVE) {
         totalXlm = double.tryParse(balance.balance) ?? 0.0;
 
-        // Selling liabilities are XLM locked in sell offers
         sellingLiabilities =
             double.tryParse(balance.sellingLiabilities ?? '0') ?? 0.0;
         break;
       }
     }
 
-    // Calculate minimum balance required
     final minimumBalance = _calculateMinimumBalance(
       account,
       baseReserve: baseReserve,
       subentryReserve: subentryReserve,
     );
 
-    // Use integer stroops math to avoid floating drift near reserve boundaries.
     final totalStroops = toStroops(totalXlm);
     final reserveStroops = (minimumBalance * 1e7).ceil();
     final liabilitiesStroops = toStroops(sellingLiabilities);
     final spendableStroops = totalStroops - reserveStroops - liabilitiesStroops;
 
-    // Return 0 if negative (shouldn't happen in normal circumstances)
     return spendableStroops > 0 ? fromStroops(spendableStroops) : 0.0;
   }
 
@@ -123,11 +105,6 @@ class StellarAccountService extends StellarBaseService {
     return _baseReserve;
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Balances
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Get spendable XLM balance (excludes minimum reserve and selling liabilities)
   Future<double> getXlmBalance(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
@@ -146,8 +123,6 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  /// Returns the latest minimum XLM needed to activate a brand-new account.
-  /// Pulls latest ledger reserve data from Horizon and falls back safely.
   Future<double> getLatestAccountActivationMinXlm({
     bool forceRefresh = false,
   }) async {
@@ -191,7 +166,6 @@ class StellarAccountService extends StellarBaseService {
       if (stroopsRaw != null) {
         final reserveStroops = int.tryParse('$stroopsRaw');
         if (reserveStroops != null && reserveStroops > 0) {
-          // Minimum account reserve is currently 2 * base reserve.
           minXlm = (reserveStroops * 2) / 10000000.0;
         }
       }
@@ -228,7 +202,6 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  /// Get total XLM balance (includes reserves - use for display purposes only)
   Future<double> getTotalXlmBalance(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
@@ -245,7 +218,6 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  /// Get XLM minimum balance (base reserve + subentry reserves)
   Future<double> getXlmMinimumBalance(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
@@ -264,14 +236,9 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  /// Get available (spendable) balance for an asset
-  /// For XLM: Returns spendable amount (total - reserves - selling liabilities)
-  /// For other assets: Returns available amount (balance - selling liabilities)
-  Future<double> getUsdcBalance(String accountId) => getAssetBalance(accountId, usdc);
+  Future<double> getUsdcBalance(String accountId) =>
+      getAssetBalance(accountId, usdc);
 
-  /// Get available (spendable) balance for any asset
-  /// For XLM: Returns spendable amount (total - reserves - selling liabilities)
-  /// For other assets: Returns available amount (balance - selling liabilities)
   Future<double> getAssetBalance(String accountId, Asset asset) async {
     try {
       final acc = await loadAccount(accountId);
@@ -317,8 +284,6 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  /// Get detailed balance breakdown for an account
-  /// Returns map with total, spendable, reserved, and locked amounts
   Future<Map<String, double>> getXlmBalanceBreakdown(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
@@ -371,11 +336,8 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Trustlines
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  Future<bool> hasUsdcTrustline(String accountId) => hasTrustline(accountId, usdc);
+  Future<bool> hasUsdcTrustline(String accountId) =>
+      hasTrustline(accountId, usdc);
 
   Future<bool> hasTrustline(String accountId, Asset asset) async {
     try {
@@ -507,10 +469,6 @@ class StellarAccountService extends StellarBaseService {
     await createTrustline(keyPair: keyPair, asset: asset, limit: limit);
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Account Data
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<String> setAccountData({
     required KeyPair keyPair,
     required String key,
@@ -597,10 +555,6 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Account Options
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<String> setAccountOptions({
     required KeyPair keyPair,
     String? homeDomain,
@@ -655,10 +609,6 @@ class StellarAccountService extends StellarBaseService {
     return setAccountOptions(keyPair: keyPair, homeDomain: domain);
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Account Merge
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<String> mergeAccount({
     required KeyPair keyPair,
     required String destinationId,
@@ -703,10 +653,6 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Sponsorship
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Future<String> sponsorAccount({
     required KeyPair sponsorKeyPair,
     required String sponsoredId,
@@ -748,11 +694,6 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  // Add these new methods to your StellarAccountService class
-  // Insert them after the getXlmMinimumBalance method
-
-  /// Get the base reserve amount (2 * baseReserve)
-  /// This is the minimum balance required for an account with no subentries
   Future<double> getBaseReserve(String accountId) async {
     try {
       final baseReserve = await _resolveBaseReserveOrFallback();
@@ -766,14 +707,11 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  /// Get the trustline reserve amount (number of trustlines * subentryReserve)
-  /// This is the reserve locked up by trustlines only
   Future<double> getTrustlineReserve(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
       final subentryReserve = await _resolveBaseReserveOrFallback();
 
-      // Count trustlines (non-native balances)
       int trustlineCount = acc.balances
           .where((b) => b.assetType != Asset.TYPE_NATIVE)
           .length;
@@ -788,8 +726,6 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  /// Get the total subentry reserve (all subentries * subentryReserve)
-  /// Includes trustlines, signers, data entries, and offers
   Future<double> getSubentryReserve(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
@@ -807,14 +743,11 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-  /// Get detailed reserve breakdown
-  /// Returns map with base, trustline, and other subentry reserves
   Future<Map<String, double>> getReserveBreakdown(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
       final subentryReserve = await _resolveBaseReserveOrFallback();
 
-      // Count each type of subentry
       int trustlineCount = acc.balances
           .where((b) => b.assetType != Asset.TYPE_NATIVE)
           .length;
@@ -823,14 +756,12 @@ class StellarAccountService extends StellarBaseService {
 
       int dataEntryCount = acc.data.length;
 
-      // Total subentries (may include offers not directly visible)
       final totalSubentries = acc.subentryCount;
       final numSponsoring = acc.numSponsoring;
       final numSponsored = acc.numSponsored;
       final effectiveSubentries =
           (totalSubentries + numSponsoring - numSponsored).clamp(0, 1 << 30);
 
-      // Calculate reserves
       final baseReserve = 2 * subentryReserve;
       final trustlineReserve = trustlineCount * subentryReserve;
       final signerReserve = signerCount * subentryReserve;

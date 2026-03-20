@@ -1,4 +1,3 @@
-// lib/features/settings/view/widgets/section_header.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
@@ -24,4 +23,3 @@ class SectionHeader extends StatelessWidget {
     );
   }
 }
-

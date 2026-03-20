@@ -20,8 +20,6 @@ class MerchantOnboardingSnapshot {
 
   bool get isCompleted => nextStep == MerchantOnboardingStep.completed;
 
-  /// Whether the user can take an action for the current step
-  /// (false when profile is pending or suspended).
   bool get canProceed {
     if (isCompleted) return false;
     final p = merchantProfile;
@@ -30,7 +28,7 @@ class MerchantOnboardingSnapshot {
     if (p.isApproved && nextStep == MerchantOnboardingStep.paymentAccount) {
       return true;
     }
-    return false; // pending or suspended
+    return false;
   }
 }
 
@@ -66,7 +64,6 @@ class MerchantOnboardingFlowService {
     if (profile == null || profile.isRejected) {
       return MerchantOnboardingStep.profile;
     }
-    // Pending or suspended â€” still on profile step (waiting)
     if (profile.isPending || profile.isSuspended) {
       return MerchantOnboardingStep.profile;
     }

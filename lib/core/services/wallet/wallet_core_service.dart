@@ -111,7 +111,6 @@ class WalletCoreService {
 
   void _handleAuthError(ApiException e) {
     if (e.statusCode == 401) {
-      // ignore: avoid_print
       print('[WalletCoreService] Unauthorized token');
     }
   }

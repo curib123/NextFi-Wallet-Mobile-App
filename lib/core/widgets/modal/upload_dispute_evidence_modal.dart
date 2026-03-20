@@ -275,10 +275,7 @@ class _ProofField extends StatelessWidget {
         style: AppFonts.sora(fontSize: 13, color: colors.textPrimary),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: AppFonts.sora(
-            fontSize: 12.5,
-            color: colors.textSecondary,
-          ),
+          hintStyle: AppFonts.sora(fontSize: 12.5, color: colors.textSecondary),
           border: InputBorder.none,
         ),
       ),
@@ -331,5 +328,3 @@ class _SourceOption extends StatelessWidget {
     );
   }
 }
-
-

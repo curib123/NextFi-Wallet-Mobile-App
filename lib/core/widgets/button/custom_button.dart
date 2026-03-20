@@ -26,9 +26,8 @@ class CustomButton extends StatelessWidget {
 
     final bool isDisabled = type == ButtonType.disabled;
 
-    // Resolve colors per type
     Color fgColor;
-    Color? bgColor; // only used for filled
+    Color? bgColor;
     Color borderColor;
 
     switch (type) {
@@ -82,8 +81,6 @@ class CustomButton extends StatelessWidget {
     );
     final BorderRadius radius = BorderRadius.circular(10);
 
-    // Choose the underlying button widget based on type.
-    // Disabled uses OutlinedButton semantics with custom colors and onPressed: null.
     Widget button;
     if (type == ButtonType.filled) {
       final style = ButtonStyle(
@@ -113,7 +110,6 @@ class CustomButton extends StatelessWidget {
         child: child,
       );
     } else {
-      // outlined & disabled share the same base (OutlinedButton) with custom side/background
       final style = ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (type == ButtonType.disabled) return bgColor!;

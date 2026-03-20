@@ -1,4 +1,3 @@
-// lib/features/wallet_settings/view/widgets/phrase_card_refined.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -47,10 +46,7 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            colors.surface,
-            colors.surface.withValues(alpha: 0.9),
-          ],
+          colors: [colors.surface, colors.surface.withValues(alpha: 0.9)],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
@@ -115,7 +111,6 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
         ),
         child: Stack(
           children: [
-            // Animated shimmer effect
             AnimatedBuilder(
               animation: _shimmerController,
               builder: (context, child) {
@@ -139,7 +134,6 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
                 );
               },
             ),
-            // Content
             Column(
               children: [
                 Container(
@@ -293,13 +287,15 @@ class _WordChipState extends State<_WordChip>
       duration: const Duration(milliseconds: 400),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
+    _opacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
     Future.delayed(widget.delay, () {
       if (mounted) _controller.forward();

@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-enum SettingAction {
-  wallet,
-  changePin,
-  fiatCurrency,
-  biometrics,
-  themeMode, // <-- NEW: used for the Light/Dark switch
-}
+enum SettingAction { wallet, changePin, fiatCurrency, biometrics, themeMode }
 
 @immutable
 class SettingItem {
@@ -48,15 +42,12 @@ class SettingItem {
 
 @immutable
 class SettingSection {
-  final String? header; // null or empty => no header
+  final String? header;
   final List<SettingItem> items;
 
   const SettingSection({this.header, required this.items});
 
-  SettingSection copyWith({
-    String? header,
-    List<SettingItem>? items,
-  }) {
+  SettingSection copyWith({String? header, List<SettingItem>? items}) {
     return SettingSection(
       header: header ?? this.header,
       items: items ?? this.items,

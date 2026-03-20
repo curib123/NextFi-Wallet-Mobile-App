@@ -1,4 +1,3 @@
-// lib/features/transactions/viewmodel/transactions_vm.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -9,7 +8,8 @@ import 'package:next_fi/features/transactions/data/models/tx.dart';
 import 'package:next_fi/features/transactions/presentation/viewmodels/transactions_state.dart';
 
 class TransactionsVM extends ChangeNotifier {
-  TransactionsVM({required StellarWalletServices stellarSvc}) : _stellar = stellarSvc;
+  TransactionsVM({required StellarWalletServices stellarSvc})
+    : _stellar = stellarSvc;
 
   final StellarWalletServices _stellar;
 
@@ -21,37 +21,26 @@ class TransactionsVM extends ChangeNotifier {
     _safeNotify();
   }
 
-  // Paging + guards
   final int _limit = 20;
   int _fetchGen = 0;
 
-  // Internals
   final Set<String> _seenIds = <String>{};
   StreamSubscription<stellar.PaymentOperationResponse>? _incomingSub;
 
-  // Public incoming stream for UI chips/toasts
-  final StreamController<Tx> _incomingController = StreamController<Tx>.broadcast();
+  final StreamController<Tx> _incomingController =
+      StreamController<Tx>.broadcast();
   Stream<Tx> get incomingStream => _incomingController.stream;
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-  // Notification Badge Support
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
-  /// Number of unread incoming transactions
   int _unreadCount = 0;
   int get unreadCount => _unreadCount;
 
-  /// Number of pending transactions (transactions not yet confirmed)
   int _pendingCount = 0;
   int get pendingCount => _pendingCount;
 
-  /// Total notification count (unread + pending)
   int get notificationCount => _unreadCount + _pendingCount;
 
-  /// Whether there are any notifications
   bool get hasNotifications => notificationCount > 0;
 
-  /// Mark all transactions as read (clears unread count)
   void markAllAsRead() {
     if (_unreadCount > 0) {
       _unreadCount = 0;
@@ -59,18 +48,15 @@ class TransactionsVM extends ChangeNotifier {
     }
   }
 
-  /// Mark a specific transaction as read by ID
   void markAsRead(String txId) {
     if (txId.isEmpty) return;
 
-    // Check if this transaction was unread
     final tx = _state.txs.firstWhere(
-          (t) => (t['id'] ?? '').toString() == txId,
+      (t) => (t['id'] ?? '').toString() == txId,
       orElse: () => <String, dynamic>{},
     );
 
     if (tx.isNotEmpty && tx['unread'] == true) {
-      // Update the transaction
       final updatedTxs = _state.txs.map((t) {
         if ((t['id'] ?? '').toString() == txId) {
           final updated = Map<String, dynamic>.from(t);
@@ -85,7 +71,6 @@ class TransactionsVM extends ChangeNotifier {
     }
   }
 
-  /// Update pending transaction count (can be called by external services)
   void updatePendingCount(int count) {
     if (_pendingCount != count) {
       _pendingCount = count;
@@ -93,42 +78,30 @@ class TransactionsVM extends ChangeNotifier {
     }
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-  // Computed Properties for Filtering
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
-  /// Get only unread transactions
   List<Tx> get unreadTransactions {
     return _state.txs.where((tx) => tx['unread'] == true).toList();
   }
 
-  /// Get only incoming transactions
   List<Tx> get incomingTransactions {
     return _state.txs.where((tx) => tx['direction'] == 'in').toList();
   }
 
-  /// Get only outgoing transactions
   List<Tx> get outgoingTransactions {
     return _state.txs.where((tx) => tx['direction'] == 'out').toList();
   }
 
-  /// Get transactions by asset
   List<Tx> getTransactionsByAsset(String asset) {
     return _state.txs.where((tx) => tx['asset'] == asset).toList();
   }
 
-  /// Get recent transactions (last N)
   List<Tx> getRecentTransactions([int count = 5]) {
     return _state.txs.take(count).toList();
   }
-
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
   bool get isTestnet => _stellar.isTestnet;
 
   bool _disposed = false;
 
-  /// Safely notify listeners, avoiding errors during build phase
   void _safeNotify() {
     if (_disposed) return;
     final phase = SchedulerBinding.instance.schedulerPhase;
@@ -141,21 +114,21 @@ class TransactionsVM extends ChangeNotifier {
     }
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Bind to wallet address Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   void bindToAddress(String? newAddr) {
     final addr = (newAddr ?? '').trim();
     if (addr.isEmpty) {
       if (_state.address != null) {
-        // clear when wallet disappears
-        _set(_state.copyWith(
-          address: null,
-          loading: false,
-          errorMsg: 'No wallet found. Please import or create a wallet.',
-          cursor: null,
-          hasMore: true,
-          txs: <Tx>[],
-          accountMissing: false,
-        ));
+        _set(
+          _state.copyWith(
+            address: null,
+            loading: false,
+            errorMsg: 'No wallet found. Please import or create a wallet.',
+            cursor: null,
+            hasMore: true,
+            txs: <Tx>[],
+            accountMissing: false,
+          ),
+        );
         _seenIds.clear();
         _unreadCount = 0;
         _pendingCount = 0;
@@ -173,15 +146,17 @@ class TransactionsVM extends ChangeNotifier {
     _seenIds.clear();
     _unreadCount = 0;
     _pendingCount = 0;
-    _set(_state.copyWith(
-      address: addr,
-      loading: true,
-      errorMsg: null,
-      cursor: null,
-      hasMore: true,
-      txs: <Tx>[],
-      accountMissing: false,
-    ));
+    _set(
+      _state.copyWith(
+        address: addr,
+        loading: true,
+        errorMsg: null,
+        cursor: null,
+        hasMore: true,
+        txs: <Tx>[],
+        accountMissing: false,
+      ),
+    );
 
     scheduleMicrotask(() async {
       await fetch(loadMore: false);
@@ -189,7 +164,6 @@ class TransactionsVM extends ChangeNotifier {
     });
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Public API Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   void setFilter(TxFilter v) {
     if (_state.filter == v) return;
     _set(_state.copyWith(filter: v));
@@ -203,7 +177,14 @@ class TransactionsVM extends ChangeNotifier {
   Future<void> fetch({required bool loadMore}) async {
     final addr = _state.address;
     if (addr == null || addr.isEmpty) {
-      _set(_state.copyWith(loading: false, errorMsg: _state.errorMsg ?? 'No wallet found. Please import or create a wallet.'));
+      _set(
+        _state.copyWith(
+          loading: false,
+          errorMsg:
+              _state.errorMsg ??
+              'No wallet found. Please import or create a wallet.',
+        ),
+      );
       return;
     }
 
@@ -213,7 +194,13 @@ class TransactionsVM extends ChangeNotifier {
       if (!_state.hasMore || _state.loadingMore) return;
       _set(_state.copyWith(loadingMore: true));
     } else {
-      _set(_state.copyWith(loading: true, errorMsg: null, cursor: _state.txs.isEmpty ? null : _state.cursor));
+      _set(
+        _state.copyWith(
+          loading: true,
+          errorMsg: null,
+          cursor: _state.txs.isEmpty ? null : _state.cursor,
+        ),
+      );
     }
 
     try {
@@ -236,7 +223,7 @@ class TransactionsVM extends ChangeNotifier {
         if (tx != null) newTx.add(tx);
       }
 
-      if (myToken != _fetchGen) return; // stale
+      if (myToken != _fetchGen) return;
 
       List<Tx> nextList;
       Set<String> nextSeen = _seenIds;
@@ -254,27 +241,30 @@ class TransactionsVM extends ChangeNotifier {
         ..clear()
         ..addAll(nextSeen);
 
-      // Calculate unread count (only for initial load, not pagination)
       if (!loadMore) {
-        _unreadCount = 0; // Reset on fresh load
+        _unreadCount = 0;
       }
 
-      _set(_state.copyWith(
-        txs: nextList,
-        cursor: ops.isNotEmpty ? ops.last.pagingToken : _state.cursor,
-        hasMore: ops.length == _limit,
-        accountMissing: false,
-        errorMsg: null,
-      ));
+      _set(
+        _state.copyWith(
+          txs: nextList,
+          cursor: ops.isNotEmpty ? ops.last.pagingToken : _state.cursor,
+          hasMore: ops.length == _limit,
+          accountMissing: false,
+          errorMsg: null,
+        ),
+      );
     } catch (e) {
       if (myToken != _fetchGen) return;
       if (_isAccountMissingError(e)) {
-        _set(_state.copyWith(
-          accountMissing: true,
-          txs: <Tx>[],
-          hasMore: false,
-          errorMsg: null,
-        ));
+        _set(
+          _state.copyWith(
+            accountMissing: true,
+            txs: <Tx>[],
+            hasMore: false,
+            errorMsg: null,
+          ),
+        );
       } else {
         _set(_state.copyWith(errorMsg: 'Error fetching history: $e'));
       }
@@ -296,33 +286,42 @@ class TransactionsVM extends ChangeNotifier {
     super.dispose();
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Internals Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   void _subscribeIncomingIfReady() {
     final addr = _state.address;
     if (addr == null || addr.isEmpty || _state.accountMissing) return;
 
     _incomingSub?.cancel();
-    _incomingSub = _stellar.paymentsStream(addr).listen((op) {
-      final tx = _opToTx(op, addr, markAsUnread: true);
-      if (tx == null) return;
+    _incomingSub = _stellar
+        .paymentsStream(addr)
+        .listen(
+          (op) {
+            final tx = _opToTx(op, addr, markAsUnread: true);
+            if (tx == null) return;
 
-      final id = (tx['id'] ?? '').toString();
-      if (id.isEmpty || _seenIds.contains(id)) return;
+            final id = (tx['id'] ?? '').toString();
+            if (id.isEmpty || _seenIds.contains(id)) return;
 
-      _seenIds.add(id);
+            _seenIds.add(id);
 
-      // Mark new incoming transactions as unread
-      if (tx['direction'] == 'in' && tx['unread'] == true) {
-        _unreadCount++;
-      }
+            if (tx['direction'] == 'in' && tx['unread'] == true) {
+              _unreadCount++;
+            }
 
-      final updated = [tx, ..._state.txs];
-      _set(_state.copyWith(txs: updated));
-      _incomingController.add(tx);
-    }, onError: (_) {/* silent; pull-to-refresh available */});
+            final updated = [tx, ..._state.txs];
+            _set(_state.copyWith(txs: updated));
+            _incomingController.add(tx);
+          },
+          onError: (_) {
+            /* silent; pull-to-refresh available */
+          },
+        );
   }
 
-  Tx? _opToTx(stellar.OperationResponse op, String myAddr, {bool markAsUnread = false}) {
+  Tx? _opToTx(
+    stellar.OperationResponse op,
+    String myAddr, {
+    bool markAsUnread = false,
+  }) {
     late final String assetCode;
     late final double amount;
     late final String from;
@@ -369,7 +368,7 @@ class TransactionsVM extends ChangeNotifier {
       'direction': isIncoming ? 'in' : 'out',
       'recName': null,
       'recColor': null,
-      'unread': markAsUnread && isIncoming, // Only mark incoming as unread
+      'unread': markAsUnread && isIncoming,
     };
   }
 
@@ -387,11 +386,17 @@ class TransactionsVM extends ChangeNotifier {
       }
     } catch (_) {}
     final s = e.toString();
-    return s.contains('404') || s.contains('Resource Missing') || s.contains('not_found');
+    return s.contains('404') ||
+        s.contains('Resource Missing') ||
+        s.contains('not_found');
   }
 
   int? _safeParseMillis(String? iso) {
     if (iso == null || iso.isEmpty) return null;
-    try { return DateTime.parse(iso).millisecondsSinceEpoch; } catch (_) { return null; }
+    try {
+      return DateTime.parse(iso).millisecondsSinceEpoch;
+    } catch (_) {
+      return null;
+    }
   }
 }

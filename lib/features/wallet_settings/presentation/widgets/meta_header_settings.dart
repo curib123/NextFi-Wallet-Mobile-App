@@ -1,4 +1,3 @@
-// lib/features/wallet_settings/view/widgets/meta_header_refined.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -14,7 +13,6 @@ class MetaHeaderSettings extends StatelessWidget {
 
     return Row(
       children: [
-        // Word count badge
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
@@ -42,11 +40,7 @@ class MetaHeaderSettings extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                LucideIcons.keyRound,
-                size: 18,
-                color: colors.primary,
-              ),
+              Icon(LucideIcons.keyRound, size: 18, color: colors.primary),
               const SizedBox(width: 8),
               Text(
                 '$wordCount-word',
@@ -63,7 +57,6 @@ class MetaHeaderSettings extends StatelessWidget {
 
         const SizedBox(width: 12),
 
-        // Divider
         Expanded(
           child: Container(
             height: 1.5,
@@ -80,7 +73,6 @@ class MetaHeaderSettings extends StatelessWidget {
 
         const SizedBox(width: 12),
 
-        // Title
         Text(
           "Recovery Phrase",
           style: TextStyle(

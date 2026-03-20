@@ -3,10 +3,6 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/core/services/reviews/models/reviews_models.dart';
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// MERCHANT INFO SECTION
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class MerchantInfoSection extends StatelessWidget {
   const MerchantInfoSection({
     super.key,
@@ -39,23 +35,20 @@ class MerchantInfoSection extends StatelessWidget {
   final int? reviewCount;
   final bool loadingReviews;
 
-  /// Returns true only for known, displayable merchant types.
   bool _isKnownType(MerchantType t) =>
       t == MerchantType.individual || t == MerchantType.business;
 
   @override
   Widget build(BuildContext context) {
-    final tierColor  = getTierColor(profile.tier);
-    final tierLabel  = getTierLabel(profile.tier);
-    final tierIcon   = getTierIcon(profile.tier);
+    final tierColor = getTierColor(profile.tier);
+    final tierLabel = getTierLabel(profile.tier);
+    final tierIcon = getTierIcon(profile.tier);
     final availColor = getAvailabilityColor(profile.availability);
     final availLabel = getAvailabilityLabel(profile.availability);
 
-    // Only resolve type label/icon when the type is known â€” avoids showing
-    // 'UNKNOWN' badge for merchants with an unrecognised type value.
     final showTypeBadge = _isKnownType(profile.type);
     final typeLabel = showTypeBadge ? getTypeLabel(profile.type) : null;
-    final typeIcon  = showTypeBadge ? getTypeIcon(profile.type)  : null;
+    final typeIcon = showTypeBadge ? getTypeIcon(profile.type) : null;
 
     return Container(
       width: double.infinity,
@@ -67,12 +60,10 @@ class MerchantInfoSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // â”€â”€ Section header bar
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
               children: [
-                // Icon badge
                 Container(
                   width: 28,
                   height: 28,
@@ -99,9 +90,11 @@ class MerchantInfoSection extends StatelessWidget {
                 ),
                 const Spacer(),
 
-                // â”€â”€ Tier badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: tierColor,
                     borderRadius: BorderRadius.circular(6),
@@ -124,11 +117,13 @@ class MerchantInfoSection extends StatelessWidget {
                   ),
                 ),
 
-                // â”€â”€ Merchant type badge â€” only shown for known types
                 if (showTypeBadge && typeLabel != null && typeIcon != null) ...[
                   const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: c.info.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(6),
@@ -155,7 +150,6 @@ class MerchantInfoSection extends StatelessWidget {
 
                 const SizedBox(width: 10),
 
-                // â”€â”€ Availability
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -186,7 +180,6 @@ class MerchantInfoSection extends StatelessWidget {
           _SolidRule(c: c),
           const SizedBox(height: 14),
 
-          // â”€â”€ Name + rating block
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -232,7 +225,6 @@ class MerchantInfoSection extends StatelessWidget {
                   ),
                 ),
 
-                // Rating block
                 if (loadingReviews)
                   Container(
                     width: 64,
@@ -290,7 +282,6 @@ class MerchantInfoSection extends StatelessWidget {
             ),
           ),
 
-          // â”€â”€ Bio
           if (profile.bio != null && profile.bio!.isNotEmpty) ...[
             const SizedBox(height: 10),
             Padding(
@@ -309,7 +300,6 @@ class MerchantInfoSection extends StatelessWidget {
             ),
           ],
 
-          // â”€â”€ Payment methods
           if (paymentMethodIds.isNotEmpty) ...[
             const SizedBox(height: 12),
             Padding(
@@ -340,10 +330,6 @@ class MerchantInfoSection extends StatelessWidget {
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// MERCHANT INFO SKELETON
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class MerchantInfoSkeleton extends StatefulWidget {
   const MerchantInfoSkeleton({super.key, required this.c});
@@ -403,7 +389,6 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header bar: icon Â· label Â· spacer Â· tier Â· type Â· availability
               Row(
                 children: [
                   box(w: 28, h: 28, r: 8),
@@ -420,7 +405,6 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
               const SizedBox(height: 14),
               Container(height: 1, color: c.border),
               const SizedBox(height: 14),
-              // Name + rating row
               Row(
                 children: [
                   Expanded(
@@ -443,10 +427,6 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// REVIEWS SECTION
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ReviewsSection extends StatelessWidget {
   const ReviewsSection({
@@ -475,7 +455,6 @@ class ReviewsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // â”€â”€ Section header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
@@ -488,11 +467,7 @@ class ReviewsSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: c.border),
                   ),
-                  child: Icon(
-                    Icons.star_rounded,
-                    size: 14,
-                    color: c.warning,
-                  ),
+                  child: Icon(Icons.star_rounded, size: 14, color: c.warning),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -506,7 +481,6 @@ class ReviewsSection extends StatelessWidget {
                 ),
                 const Spacer(),
 
-                // Average score
                 Text(
                   averageRating == null
                       ? '--'
@@ -529,7 +503,6 @@ class ReviewsSection extends StatelessWidget {
                   ),
                 ),
 
-                // Count badge
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -576,12 +549,12 @@ class ReviewsSection extends StatelessWidget {
                     .entries
                     .map(
                       (e) => Padding(
-                    padding: EdgeInsets.only(
-                      bottom: e.key < recent.length - 1 ? 10 : 0,
-                    ),
-                    child: ReviewItem(c: c, review: e.value),
-                  ),
-                )
+                        padding: EdgeInsets.only(
+                          bottom: e.key < recent.length - 1 ? 10 : 0,
+                        ),
+                        child: ReviewItem(c: c, review: e.value),
+                      ),
+                    )
                     .toList(),
               ),
             ),
@@ -591,10 +564,6 @@ class ReviewsSection extends StatelessWidget {
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// REVIEW ITEM
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ReviewItem extends StatelessWidget {
   const ReviewItem({
@@ -624,11 +593,10 @@ class ReviewItem extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Stars
               Row(
                 children: List.generate(
                   5,
-                      (i) => Padding(
+                  (i) => Padding(
                     padding: const EdgeInsets.only(right: 2),
                     child: Icon(
                       i < review.rating
@@ -680,10 +648,6 @@ class ReviewItem extends StatelessWidget {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// SHARED ATOMS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _SolidRule extends StatelessWidget {
   const _SolidRule({required this.c});
   final AppColor c;
@@ -705,7 +669,7 @@ class _InlineRatingStars extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(
         5,
-            (i) => Padding(
+        (i) => Padding(
           padding: EdgeInsets.only(right: i < 4 ? 1 : 0),
           child: Icon(
             i < filled ? Icons.star_rounded : Icons.star_outline_rounded,

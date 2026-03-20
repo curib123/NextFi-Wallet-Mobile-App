@@ -26,7 +26,9 @@ class WalletHomeFlowService {
     final authenticated = await _authService.isAuthenticated;
     if (!authenticated) return false;
 
-    final existsInBackend = await _walletManager.hasAddressInBackend(normalized);
+    final existsInBackend = await _walletManager.hasAddressInBackend(
+      normalized,
+    );
     if (existsInBackend) return true;
 
     await _walletManager.saveAddressIfMissing(
@@ -41,4 +43,3 @@ class WalletHomeFlowService {
     return verification.status == TrustStatus.ready;
   }
 }
-

@@ -40,16 +40,10 @@ class LoginController extends Notifier<LoginState> {
     state = state.copyWith(googleLoading: true);
     try {
       final user = await ref.read(loginServiceProvider).signInWithGoogle();
-      return await _handleSuccessfulLogin(
-        user: user,
-        clearGoogleLoading: true,
-      );
+      return await _handleSuccessfulLogin(user: user, clearGoogleLoading: true);
     } catch (_) {
       if (ref.mounted) {
-        state = state.copyWith(
-          googleLoading: false,
-          postLoginLoading: false,
-        );
+        state = state.copyWith(googleLoading: false, postLoginLoading: false);
       }
       rethrow;
     }
@@ -66,10 +60,7 @@ class LoginController extends Notifier<LoginState> {
       );
     } catch (_) {
       if (ref.mounted) {
-        state = state.copyWith(
-          facebookLoading: false,
-          postLoginLoading: false,
-        );
+        state = state.copyWith(facebookLoading: false, postLoginLoading: false);
       }
       rethrow;
     }
@@ -108,4 +99,3 @@ class LoginController extends Notifier<LoginState> {
     return user;
   }
 }
-

@@ -1,4 +1,3 @@
-/// Review model representing a post-trade rating/feedback
 class ReviewModel {
   final String id;
   final String tradeId;
@@ -59,9 +58,13 @@ class ReviewModel {
       revieweeId: readString(const ['revieweeId', 'reviewee_id']),
       rating: readInt(const ['rating']) ?? 0,
       comment: (() {
-        final text = readString(
-          const ['comment', 'feedback', 'message', 'review', 'remarks'],
-        );
+        final text = readString(const [
+          'comment',
+          'feedback',
+          'message',
+          'review',
+          'remarks',
+        ]);
         return text.isEmpty ? null : text;
       })(),
       createdAt: readDate(const ['createdAt', 'created_at']),
@@ -69,7 +72,6 @@ class ReviewModel {
   }
 }
 
-/// Reviews meta for pagination
 class ReviewsMeta {
   final int total;
   final int page;
@@ -106,7 +108,6 @@ class ReviewsMeta {
   }
 }
 
-/// Paginated reviews response
 class ReviewsPagedResponse {
   final List<ReviewModel> items;
   final ReviewsMeta meta;
@@ -114,7 +115,6 @@ class ReviewsPagedResponse {
   const ReviewsPagedResponse({required this.items, required this.meta});
 }
 
-/// Lightweight user rating aggregate.
 class UserRatingSummary {
   final double? averageRating;
   final int reviewCount;

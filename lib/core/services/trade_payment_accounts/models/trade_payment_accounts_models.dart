@@ -22,7 +22,10 @@ class TradePaymentAccountsContext {
   factory TradePaymentAccountsContext.fromJson(Map<String, dynamic> json) {
     List<Map<String, dynamic>> asMapList(dynamic v) {
       if (v is! List) return const [];
-      return v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      return v
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     }
 
     List<String> asStringList(dynamic v) {
@@ -36,8 +39,8 @@ class TradePaymentAccountsContext {
     return TradePaymentAccountsContext(
       offerId: (json['offerId'] ?? json['offer_id'] ?? '').toString(),
       offerType: (json['offerType'] ?? json['offer_type'] ?? '').toString(),
-      merchantUserId:
-          (json['merchantUserId'] ?? json['merchant_user_id'] ?? '').toString(),
+      merchantUserId: (json['merchantUserId'] ?? json['merchant_user_id'] ?? '')
+          .toString(),
       paymentMethods: asMapList(
         json['paymentMethods'] ?? json['payment_methods'],
       ).map(PaymentMethodModel.fromJson).toList(),
@@ -48,7 +51,8 @@ class TradePaymentAccountsContext {
         json['clientAccounts'] ?? json['client_accounts'],
       ).map(UserPaymentAccountModel.fromJson).toList(),
       compatiblePaymentMethodIds: asStringList(
-        json['compatiblePaymentMethodIds'] ?? json['compatible_payment_method_ids'],
+        json['compatiblePaymentMethodIds'] ??
+            json['compatible_payment_method_ids'],
       ),
     );
   }

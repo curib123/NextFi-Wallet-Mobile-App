@@ -1,4 +1,3 @@
-// lib/features/price_chart/view/widgets/line_chart_painter.dart
 import 'package:flutter/material.dart';
 
 class LineChartPainter extends CustomPainter {
@@ -18,15 +17,15 @@ class LineChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (points.length < 2) return;
 
-    // grid
-    final grid = Paint()..color = gridColor..strokeWidth = 1;
+    final grid = Paint()
+      ..color = gridColor
+      ..strokeWidth = 1;
     const rows = 3;
     for (int i = 0; i <= rows; i++) {
       final y = size.height * (i / rows);
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
     }
 
-    // line
     final line = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -40,7 +39,6 @@ class LineChartPainter extends CustomPainter {
     }
     canvas.drawPath(path, line);
 
-    // fill
     final fillPath = Path.from(path)
       ..lineTo(points.last.dx, size.height)
       ..lineTo(points.first.dx, size.height)
@@ -49,13 +47,16 @@ class LineChartPainter extends CustomPainter {
     final shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [color.withValues(alpha: 0.25), color.withValues(alpha: 0.04), color.withValues(alpha: 0.0)],
+      colors: [
+        color.withValues(alpha: 0.25),
+        color.withValues(alpha: 0.04),
+        color.withValues(alpha: 0.0),
+      ],
       stops: const [0.0, 0.6, 1.0],
     ).createShader(Offset.zero & size);
 
     canvas.drawPath(fillPath, Paint()..shader = shader);
 
-    // hover marker
     if (hoverIndex != null && hoverIndex! >= 0 && hoverIndex! < points.length) {
       final p = points[hoverIndex!];
       canvas.drawCircle(p, 3.5, Paint()..color = color);
@@ -64,5 +65,8 @@ class LineChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant LineChartPainter old) =>
-      old.points != points || old.color != color || old.gridColor != gridColor || old.hoverIndex != hoverIndex;
+      old.points != points ||
+      old.color != color ||
+      old.gridColor != gridColor ||
+      old.hoverIndex != hoverIndex;
 }

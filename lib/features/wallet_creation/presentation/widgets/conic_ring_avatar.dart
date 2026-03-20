@@ -1,4 +1,3 @@
-// lib/features/wallet_creation/view/widgets/conic_ring_avatar.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -119,6 +118,6 @@ class _ConicRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ConicRingPainter old) =>
       old.color != color ||
-          old.strokeWidth != strokeWidth ||
-          old.rotationTurns != rotationTurns;
+      old.strokeWidth != strokeWidth ||
+      old.rotationTurns != rotationTurns;
 }

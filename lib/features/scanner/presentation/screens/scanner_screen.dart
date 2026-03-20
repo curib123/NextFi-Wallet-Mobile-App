@@ -67,7 +67,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               onSwitchCamera: controller.switchCamera,
               onPickFromGallery: () async {
                 final message = await controller.pickQrFromGallery();
-                if (!context.mounted || message == null || message.isEmpty) return;
+                if (!context.mounted || message == null || message.isEmpty)
+                  return;
                 showFloatingSnackBar(
                   context,
                   message: message,
@@ -127,7 +128,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
                 ),
               ),
             ),
-          if (state.lastRawValue != null && state.status == ScannerStatus.paused)
+          if (state.lastRawValue != null &&
+              state.status == ScannerStatus.paused)
             Positioned(
               bottom: 0,
               left: 0,
@@ -285,12 +287,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               ),
             ),
           if (state.status == ScannerStatus.initializing)
-            Center(
-              child: CircularProgressIndicator(color: colors.primary),
-            ),
+            Center(child: CircularProgressIndicator(color: colors.primary)),
         ],
       ),
     );
   }
 }
-

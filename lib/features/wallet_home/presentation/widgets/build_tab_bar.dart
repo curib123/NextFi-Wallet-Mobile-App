@@ -26,4 +26,3 @@ Widget buildTabBar(AppColor colors) {
     ),
   );
 }
-

@@ -1,9 +1,7 @@
-// lib/features/seed_phrase/view/widgets/phrase_card.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
-/// Modern minimalist phrase card inspired by Phantom/MetaMask
 class PhraseCard extends StatelessWidget {
   const PhraseCard({
     super.key,
@@ -52,11 +50,7 @@ class PhraseCard extends StatelessWidget {
                 color: colors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                LucideIcons.eyeOff,
-                color: colors.primary,
-                size: 28,
-              ),
+              child: Icon(LucideIcons.eyeOff, color: colors.primary, size: 28),
             ),
             const SizedBox(height: 20),
             Text(
@@ -71,10 +65,7 @@ class PhraseCard extends StatelessWidget {
             Text(
               'Make sure no one is watching',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colors.textSecondary,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: colors.textSecondary, fontSize: 14),
             ),
           ],
         ),

@@ -1,4 +1,3 @@
-// lib/features/settings/view/widgets/fiat_chip.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -31,4 +30,3 @@ class FiatChip extends ConsumerWidget {
     );
   }
 }
-

@@ -24,7 +24,6 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   String? _lastLoggedCoverUrl;
   bool? _lastLoggedHasCover;
 
-  // Animation controllers
   late final AnimationController _bgCtrl = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 24),
@@ -220,7 +219,6 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
         backgroundColor: colors.background,
         body: Stack(
           children: [
-            // Animated fallback background
             Positioned.fill(
               child: IgnorePointer(
                 child: Stack(
@@ -313,7 +311,6 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                 ),
               ),
 
-            // Main content
             SafeArea(
               child: Column(
                 children: [
@@ -326,12 +323,10 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Lock icon
                           _LockIcon(unlocked: s.unlockedVisual, colors: colors),
 
                           const SizedBox(height: 32),
 
-                          // Headline
                           Text(
                             headline,
                             style: TextStyle(
@@ -344,7 +339,6 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
 
                           const SizedBox(height: 8),
 
-                          // Subheadline
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 40),
                             child: Text(
@@ -373,7 +367,6 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
 
                           const SizedBox(height: 48),
 
-                          // PIN dots display
                           AnimatedBuilder(
                             animation: _shakeCtrl,
                             builder: (context, child) {
@@ -402,7 +395,6 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                     ),
                   ),
 
-                  // Custom numeric keyboard with biometric button integrated
                   _NumericKeyboard(
                     onNumberPressed: _onNumberPressed,
                     onBackspacePressed: _onBackspacePressed,
@@ -440,7 +432,6 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   }
 }
 
-/// Modern lock icon with animation
 class _LockIcon extends StatelessWidget {
   const _LockIcon({required this.unlocked, required this.colors});
 
@@ -494,7 +485,6 @@ class _LockIcon extends StatelessWidget {
   }
 }
 
-/// PIN dots display
 class _PinDotsDisplay extends StatelessWidget {
   const _PinDotsDisplay({
     required this.pinLength,
@@ -547,7 +537,6 @@ class _PinDotsDisplay extends StatelessWidget {
   }
 }
 
-/// Custom numeric keyboard
 class _NumericKeyboard extends StatelessWidget {
   const _NumericKeyboard({
     required this.onNumberPressed,
@@ -626,7 +615,6 @@ class _NumericKeyboard extends StatelessWidget {
   }
 }
 
-/// Individual key button
 class _KeyButton extends StatefulWidget {
   const _KeyButton({
     required this.label,
@@ -714,7 +702,6 @@ class _KeyButtonState extends State<_KeyButton>
   }
 }
 
-/// Biometric key button (integrated into keyboard)
 class _BiometricKeyButton extends StatefulWidget {
   const _BiometricKeyButton({
     required this.colors,

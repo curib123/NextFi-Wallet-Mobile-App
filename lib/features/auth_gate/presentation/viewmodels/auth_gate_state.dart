@@ -28,8 +28,6 @@ class AuthGateState {
 
   static const Object _unset = Object();
 
-  /// For nullable fields, use [Object?] with a private sentinel so we can
-  /// distinguish "not provided" from "explicitly set to null".
   AuthGateState copyWith({
     bool? isNewUser,
     bool? deviceSupportsBiometrics,
@@ -37,15 +35,15 @@ class AuthGateState {
     bool? obscurePin,
     bool? submitting,
     bool? unlockedVisual,
-    Object? firstPinEntry = _unset,     // String?
-    Object? lockoutRemaining = _unset,  // Duration?
+    Object? firstPinEntry = _unset,
+    Object? lockoutRemaining = _unset,
     bool? autoBioTried,
-    Object? initWarning = _unset,       // String?
+    Object? initWarning = _unset,
   }) {
     return AuthGateState(
       isNewUser: isNewUser ?? this.isNewUser,
       deviceSupportsBiometrics:
-      deviceSupportsBiometrics ?? this.deviceSupportsBiometrics,
+          deviceSupportsBiometrics ?? this.deviceSupportsBiometrics,
       biometricsEnabled: biometricsEnabled ?? this.biometricsEnabled,
       obscurePin: obscurePin ?? this.obscurePin,
       submitting: submitting ?? this.submitting,

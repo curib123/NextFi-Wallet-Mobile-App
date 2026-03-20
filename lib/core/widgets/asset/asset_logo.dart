@@ -6,7 +6,7 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/widgets/asset/asset_remote_image.dart';
 
 class AssetLogo extends ConsumerWidget {
-  final String keyOrSymbol; // e.g. 'XLM', 'USDC', 'stellar', 'usdc_stellar'
+  final String keyOrSymbol;
   final double size;
   final double? radius;
 
@@ -33,7 +33,9 @@ class AssetLogo extends ConsumerWidget {
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(r),
-          border: Border.all(color: colors.textSecondary.withValues(alpha: .15)),
+          border: Border.all(
+            color: colors.textSecondary.withValues(alpha: .15),
+          ),
         ),
         child: Text(
           ch,
@@ -59,14 +61,18 @@ class AssetLogo extends ConsumerWidget {
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(r),
-            border: Border.all(color: colors.textSecondary.withValues(alpha: .10)),
+            border: Border.all(
+              color: colors.textSecondary.withValues(alpha: .10),
+            ),
           ),
           child: SizedBox(
             width: size * 0.45,
             height: size * 0.45,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation(colors.textSecondary.withValues(alpha: .35)),
+              valueColor: AlwaysStoppedAnimation(
+                colors.textSecondary.withValues(alpha: .35),
+              ),
             ),
           ),
         ),
@@ -75,4 +81,3 @@ class AssetLogo extends ConsumerWidget {
     );
   }
 }
-

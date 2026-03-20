@@ -1,4 +1,3 @@
-// lib/features/swap/view/widgets/error_card.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -19,39 +18,24 @@ class ErrorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: c.error.withValues(alpha: 0.15),
-          width: 1,
-        ),
+        border: Border.all(color: c.error.withValues(alpha: 0.15), width: 1),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            LucideIcons.alertTriangle,
-            size: 18,
-            color: c.error,
-          ),
+          Icon(LucideIcons.alertTriangle, size: 18, color: c.error),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(
-                color: c.error,
-                fontSize: 13,
-                height: 1.4,
-              ),
+              style: TextStyle(color: c.error, fontSize: 13, height: 1.4),
             ),
           ),
           if (onRetry != null) ...[
             const SizedBox(width: 8),
             GestureDetector(
               onTap: onRetry,
-              child: Icon(
-                LucideIcons.refreshCw,
-                size: 16,
-                color: c.error,
-              ),
+              child: Icon(LucideIcons.refreshCw, size: 16, color: c.error),
             ),
           ],
         ],

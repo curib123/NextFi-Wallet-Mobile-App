@@ -1,4 +1,3 @@
-// lib/features/price_chart/view/widgets/range_tabs.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_state.dart';
 import 'segment_button.dart';

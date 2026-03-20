@@ -1,4 +1,3 @@
-// lib/features/settings/view/widgets/setting_tile.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -33,14 +32,19 @@ class SettingTile extends StatelessWidget {
       child: Icon(item.icon, color: item.accentColor ?? c.primary, size: 18),
     );
 
-    final Widget effectiveTrailing = trailing ??
+    final Widget effectiveTrailing =
+        trailing ??
         Icon(
           LucideIcons.chevronRight,
           size: 18,
-          color: item.enabled ? c.textSecondary.withValues(alpha: 0.9) : c.textSecondary.withValues(alpha: 0.4),
+          color: item.enabled
+              ? c.textSecondary.withValues(alpha: 0.9)
+              : c.textSecondary.withValues(alpha: 0.4),
         );
 
-    final textPrimary = item.enabled ? c.textPrimary : c.textSecondary.withValues(alpha: 0.6);
+    final textPrimary = item.enabled
+        ? c.textPrimary
+        : c.textSecondary.withValues(alpha: 0.6);
 
     return MergeSemantics(
       child: Semantics(
@@ -67,8 +71,13 @@ class SettingTile extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item.title,
-                                style: TextStyle(color: textPrimary, fontWeight: FontWeight.w800)),
+                            Text(
+                              item.title,
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                             if ((item.subtitle ?? '').isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
@@ -76,7 +85,10 @@ class SettingTile extends StatelessWidget {
                                   item.subtitle!,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+                                  style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 12.5,
+                                  ),
                                 ),
                               ),
                           ],
@@ -95,5 +107,3 @@ class SettingTile extends StatelessWidget {
     );
   }
 }
-
-

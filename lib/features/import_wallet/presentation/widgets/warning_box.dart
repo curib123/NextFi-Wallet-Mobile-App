@@ -1,4 +1,3 @@
-// lib/features/import_wallet/view/widgets/warning_box.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -23,11 +22,7 @@ class WarningBox extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            LucideIcons.info,
-            color: colors.primary,
-            size: 20,
-          ),
+          Icon(LucideIcons.info, color: colors.primary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

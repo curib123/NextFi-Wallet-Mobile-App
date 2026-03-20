@@ -1,5 +1,3 @@
-// lib/common/components/alert/app_alert.dart
-
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,48 +5,47 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 
-/// Types supported by the alert.
 enum AppAlertType { loading, success, error, warning, info }
 
-/// Controller to mutate/close an open modal.
 class AppAlertController {
   final void Function(
-      AppAlertType type, {
-      String? title,
-      String? subtitle,
-      String? primaryText,
-      VoidCallback? onPrimary,
-      }) _update;
+    AppAlertType type, {
+    String? title,
+    String? subtitle,
+    String? primaryText,
+    VoidCallback? onPrimary,
+  })
+  _update;
   final VoidCallback _close;
 
   AppAlertController._(this._update, this._close);
 
   void update(
-      AppAlertType type, {
-        String? title,
-        String? subtitle,
-        String? primaryText,
-        VoidCallback? onPrimary,
-      }) =>
-      _update(type,
-          title: title,
-          subtitle: subtitle,
-          primaryText: primaryText,
-          onPrimary: onPrimary);
+    AppAlertType type, {
+    String? title,
+    String? subtitle,
+    String? primaryText,
+    VoidCallback? onPrimary,
+  }) => _update(
+    type,
+    title: title,
+    subtitle: subtitle,
+    primaryText: primaryText,
+    onPrimary: onPrimary,
+  );
 
   void close() => _close();
 }
 
-/// Show a modern minimalist bottom-sheet alert.
 AppAlertController showAppAlert(
-    BuildContext context, {
-      required AppAlertType type,
-      String? title,
-      String? subtitle,
-      String primaryText = 'OK',
-      VoidCallback? onPrimary,
-      bool barrierDismissible = false,
-    }) {
+  BuildContext context, {
+  required AppAlertType type,
+  String? title,
+  String? subtitle,
+  String primaryText = 'OK',
+  VoidCallback? onPrimary,
+  bool barrierDismissible = false,
+}) {
   final notifier = _AlertStateNotifier(
     type: type,
     title: title ?? _defaultTitle(type),
@@ -91,12 +88,12 @@ AppAlertController showAppAlert(
   );
 
   void update(
-      AppAlertType t, {
-        String? title,
-        String? subtitle,
-        String? primaryText,
-        VoidCallback? onPrimary,
-      }) {
+    AppAlertType t, {
+    String? title,
+    String? subtitle,
+    String? primaryText,
+    VoidCallback? onPrimary,
+  }) {
     notifier.updateState(
       t,
       nextTitle: title ?? _defaultTitle(t),
@@ -156,13 +153,10 @@ class _ModalScaffold extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // â”€â”€ Blurred backdrop â€” theme-aware overlay â”€â”€
         IgnorePointer(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-            child: Container(
-              color: colors.background.withValues(alpha: 0.45),
-            ),
+            child: Container(color: colors.background.withValues(alpha: 0.45)),
           ),
         ),
 
@@ -173,12 +167,7 @@ class _ModalScaffold extends StatelessWidget {
           child: SafeArea(
             top: false,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                0,
-                16,
-                bottom > 0 ? bottom : 16,
-              ),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, bottom > 0 ? bottom : 16),
               child: _AlertSheet(notifier: notifier),
             ),
           ),
@@ -276,8 +265,9 @@ class _AlertSheet extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 14,
                                     height: 1.55,
-                                    color:
-                                    colors.textSecondary.withValues(alpha: 0.75),
+                                    color: colors.textSecondary.withValues(
+                                      alpha: 0.75,
+                                    ),
                                     decoration: TextDecoration.none,
                                   ),
                                 ),
@@ -378,12 +368,12 @@ class _AlertIcon extends StatelessWidget {
             alignment: Alignment.center,
             child: visual.type == AppAlertType.loading
                 ? WavingDotsLoader(
-              color: visual.color,
-              dotCount: 3,
-              dotSize: 4.5,
-              waveHeight: 4.5,
-              speed: const Duration(milliseconds: 1100),
-            )
+                    color: visual.color,
+                    dotCount: 3,
+                    dotSize: 4.5,
+                    waveHeight: 4.5,
+                    speed: const Duration(milliseconds: 1100),
+                  )
                 : Icon(visual.icon, color: visual.color, size: 24),
           ),
         ),
@@ -540,4 +530,3 @@ String _defaultTitle(AppAlertType t) {
       return 'Information';
   }
 }
-

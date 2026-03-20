@@ -1,39 +1,32 @@
-// lib/reusable_view_model/currency_vm.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/io_client.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/app/env/app_env.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/services/secure_storage/currency_secure_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
 enum _AssetPricingKind { xlm, usdStable, unsupported }
+
 enum _AssetHistorySelection { h24, d7, d30, y1, all }
 
-/// CurrencyVM â€” authoritative live/cached exchange rate view model.
-///
-/// Design invariants:
-///  1. Rates are NEVER shown as non-zero when data is stale or unverified.
-///  2. History series are ALWAYS oldestâ†’newest.
-///  3. All HTTP responses are size-capped before parsing to prevent OOM.
-///  4. dispose() is idempotent and race-safe (_disposed guard everywhere).
-///  5. notifyListeners() is NEVER called after dispose().
-///  6. Stream controller adds are guarded: closed + disposed checks.
-///  7. _firstSuccessful() is removed â€” it was declared but never used (dead code).
-///  8. Retry uses true exponential back-off and rethrows only on final attempt.
-///  9. FX spread check uses `>` not `>=` so exact-median values pass.
-/// 10. Coinbase pagination: endTime guard added to prevent infinite loop.
-/// 11. KuCoin pagination: startAt guard added to prevent infinite loop.
-/// 12. All UTC timestamps use DateTime.now().toUtc() consistently.
-/// 13. _getCacheAge uses UTC to avoid DST bugs.
-/// 14. _zeroRates does NOT call notifyListeners() â€” callers already do.
-/// 15. _applyDailySeries is sync; awaiting it was a no-op.
-/// 16. _useCachedHistoryAsFallback is awaited correctly in _applyDailySeries.
-/// 17. formatFiatWithCode: redundant parens around fiatCode removed.
-/// 18. _consecutiveErrors is incremented on stream error but never used for
-///     any policy decision â€” it now gates reconnect logging.
+class _TimedPricePoint {
+  const _TimedPricePoint({required this.at, required this.price});
+
+  final DateTime at;
+  final double price;
+}
+
+class _FxSourceQuote {
+  const _FxSourceQuote({required this.source, required this.value});
+
+  final String source;
+  final double value;
+}
+
 class CurrencyVM extends ChangeNotifier {
   CurrencyVM({
     required StellarWalletServices stellar,
@@ -45,31 +38,21 @@ class CurrencyVM extends ChangeNotifier {
     _boot();
   }
 
-  // â”€â”€ Dependencies & Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final StellarWalletServices _stellar;
   final Duration httpTimeout;
   final Duration rateCacheDuration;
   final Duration historyCacheDuration;
 
-  // â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   static const int _maxHistoryDays = 5000;
   static const int _maxRetries = 3;
   static const Duration _retryDelay = Duration(milliseconds: 500);
   static const String _userAgent = 'NextFi/2.0';
   static const double _maxFxSpreadPct = 3.0;
   static const double _maxSingleSourceJumpPct = 20.0;
+  static const Duration _coinGeckoRateLimitCooldown = Duration(minutes: 3);
 
-  /// Maximum HTTP response body size (bytes) to parse.
-  /// Prevents OOM from malicious / runaway responses.
-  static const int _maxResponseBytes = 10 * 1024 * 1024; // 10 MB
+  static const int _maxResponseBytes = 10 * 1024 * 1024;
 
-  /// IMPORTANT (UI):
-  /// If you use a custom font like Sora and see "?" for â‚±, Â¥, â‚©, à¸¿, etc,
-  /// that's a font glyph issue (not Intl). Fix it by adding font fallbacks
-  /// in TextStyle/Theme.
-  ///
-  /// Example:
-  /// TextStyle(fontFamily: 'Sora', fontFamilyFallback: CurrencyVM.currencyFontFallback)
   static const List<String> currencyFontFallback = <String>[
     'Roboto',
     '.SF Pro Text',
@@ -82,8 +65,6 @@ class CurrencyVM extends ChangeNotifier {
     'Arial',
   ];
 
-  /// Symbol overrides for common fiats.
-  /// Does NOT fix missing glyphs â€” use [currencyFontFallback] for that.
   static const Map<String, String> _symbolOverrides = <String, String>{
     'USD': r'$',
     'EUR': 'â‚¬',
@@ -118,7 +99,6 @@ class CurrencyVM extends ChangeNotifier {
     'TRY': 'â‚º',
   };
 
-  // â”€â”€ HTTP Client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   late final IOClient _client;
   bool _disposed = false;
 
@@ -131,43 +111,33 @@ class CurrencyVM extends ChangeNotifier {
     return IOClient(hc);
   }
 
-  // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   String _fiat = 'usd';
+  String? _ratesForFiat = 'usd';
 
-  /// USDCâ†’FIAT (â‰ˆ USDâ†’FIAT since USDC is USD-pegged)
   double _usdcRate = 0;
 
-  /// XLMâ†’FIAT = (USDC per XLM) Ã— (USDCâ†’FIAT)
   double _xlmRate = 0;
 
-  /// Latest USDC per 1 XLM (from stream or market fallbacks)
   double _lastUsdcPerXlm = 0;
 
   bool _loading = true;
 
-  /// True when no reliable rates are available.
-  /// UI must show "â€”" / "N/A" instead of a stale or zero balance.
   bool _ratesUnavailable = false;
   bool _usingFallbackRates = false;
 
-  // Cache timestamps (UTC)
   DateTime? _lastRateRefresh;
   DateTime? _lastHistoryRefresh;
 
-  // In-memory caches
   Map<String, dynamic>? _lastGoodRatesCache;
   List<double>? _lastGoodHistoryCache;
 
-  // Streams
   final _xlmCtrl = StreamController<double>.broadcast();
   final _usdcCtrl = StreamController<double>.broadcast();
 
-  // Subscriptions
   StreamSubscription<dynamic>? _pairSub;
   bool _isOnline = true;
   bool _reconnectRecoveryInFlight = false;
 
-  // History series (oldest â†’ newest closes, denominated in USDC per XLM)
   List<double> _xlmHist24h = const [];
   List<double> _xlmHist7 = const [];
   List<double> _xlmHist30 = const [];
@@ -180,20 +150,17 @@ class CurrencyVM extends ChangeNotifier {
   final Map<String, DateTime> _assetUsdHistoryAt = {};
   final Set<String> _assetPriceLoadsInFlight = <String>{};
   final Set<String> _assetHistoryLoadsInFlight = <String>{};
+  DateTime? _coinGeckoRateLimitedUntil;
 
   static const Duration _assetPriceCacheTtl = Duration(minutes: 10);
   static const Duration _assetHistoryCacheTtl = Duration(hours: 6);
 
-  // Consecutive error counter
-  int _consecutiveErrors = 0;
   static const int _maxConsecutiveErrors = 3;
+  int _streamConsecutiveErrors = 0;
 
-  // â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   String get fiat => _fiat;
   String get fiatCode => _fiat.toUpperCase();
 
-  /// Returns a currency symbol, falling back to Intl, then to the code.
-  /// NOTE: Glyph rendering depends on the UI font; use [currencyFontFallback].
   String get fiatSymbol {
     final code = fiatCode;
     final override = _symbolOverrides[code];
@@ -207,7 +174,6 @@ class CurrencyVM extends ChangeNotifier {
     }
   }
 
-  /// Safer label: returns the code when the symbol equals the code (no symbol defined).
   String get fiatSymbolMaybeCode {
     final s = fiatSymbol.trim();
     return s.toUpperCase() == fiatCode ? fiatCode : s;
@@ -215,8 +181,6 @@ class CurrencyVM extends ChangeNotifier {
 
   bool get loading => _loading;
 
-  /// True when rates could not be reliably fetched.
-  /// UI should show "â€”" or "N/A" â€” never a stale zero balance.
   bool get ratesUnavailable => _ratesUnavailable;
   bool get usingFallbackRates => _usingFallbackRates;
 
@@ -233,7 +197,6 @@ class CurrencyVM extends ChangeNotifier {
   List<double> get xlmHistory365 => List.unmodifiable(_xlmHist365);
   List<double> get xlmHistoryAll => List.unmodifiable(_xlmHistAll);
 
-  // USDC stablecoin histories â€” flat at current rate
   List<double> get usdcHistory24h =>
       List<double>.filled(2, _usdcRate <= 0 ? 1.0 : _usdcRate);
   List<double> get usdcHistory7 =>
@@ -243,7 +206,6 @@ class CurrencyVM extends ChangeNotifier {
   List<double> get usdcHistory365 =>
       List<double>.filled(365, _usdcRate <= 0 ? 1.0 : _usdcRate);
 
-  // Percent deltas (oldest â†’ newest)
   double get xlmPct24h => _pct(_xlmHist24h);
   double get xlmPct7d => _pct(_xlmHist7);
   double get xlmPct30d => _pct(_xlmHist30);
@@ -255,7 +217,6 @@ class CurrencyVM extends ChangeNotifier {
   double get usdcPct30d => 0.0;
   double get usdcPct1y => 0.0;
 
-  // Cache validity helpers
   bool get hasValidRateCache =>
       _lastRateRefresh != null &&
       DateTime.now().toUtc().difference(_lastRateRefresh!) < rateCacheDuration;
@@ -265,30 +226,34 @@ class CurrencyVM extends ChangeNotifier {
       DateTime.now().toUtc().difference(_lastHistoryRefresh!) <
           historyCacheDuration;
 
-  // â”€â”€ Public Methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Set fiat currency and refresh rates.
   Future<void> setFiat(String v) async {
     final n = v.trim().toLowerCase();
     if (n.isEmpty || n == _fiat) return;
     _fiat = n;
+    _ratesForFiat = null;
+    _usdcRate = 0;
+    _xlmRate = 0;
+    _ratesUnavailable = true;
+    _usingFallbackRates = false;
     await CurrencySecureStorage.saveFiat(n);
-    // Invalidate rate cache so new fiat is fetched fresh.
     _lastRateRefresh = null;
     await _refreshUsdToFiat();
     notifyListeners();
   }
 
-  /// Reset to USD.
   Future<void> resetFiatToUsd() async {
     _fiat = 'usd';
+    _ratesForFiat = null;
+    _usdcRate = 0;
+    _xlmRate = 0;
+    _ratesUnavailable = true;
+    _usingFallbackRates = false;
     _lastRateRefresh = null;
     await CurrencySecureStorage.clearFiat();
     await _refreshUsdToFiat();
     notifyListeners();
   }
 
-  /// Manual refresh of rates (respects cache unless forced).
   Future<void> refreshRates({bool force = false}) async {
     if (!force && hasValidRateCache) {
       debugPrint('CurrencyVM: Using cached rates');
@@ -297,7 +262,6 @@ class CurrencyVM extends ChangeNotifier {
     await _refreshUsdToFiat();
   }
 
-  /// Manual refresh of history (respects cache unless forced).
   Future<void> refreshHistory({bool force = false}) async {
     if (!force && hasValidHistoryCache) {
       debugPrint('CurrencyVM: Using cached history');
@@ -322,7 +286,6 @@ class CurrencyVM extends ChangeNotifier {
     unawaited(_recoverAfterReconnect());
   }
 
-  /// Centralized fiat formatter.
   NumberFormat fiatFormatter({int? decimalDigits}) =>
       NumberFormat.simpleCurrency(name: fiatCode, decimalDigits: decimalDigits);
 
@@ -331,7 +294,6 @@ class CurrencyVM extends ChangeNotifier {
     return fiatFormatter(decimalDigits: decimalDigits).format(safe);
   }
 
-  /// FIX: Removed extraneous parens around fiatCode â€” was "(PHP)" not "PHP".
   String formatFiatWithCode(double amount, {int? decimalDigits}) {
     final safe = amount.isFinite ? amount : 0.0;
     final number = NumberFormat.currency(
@@ -347,7 +309,6 @@ class CurrencyVM extends ChangeNotifier {
     return amount >= 0 ? '+$formatted' : '-$formatted';
   }
 
-  // â”€â”€ Quick Converters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   double usdcToFiat(double u) => (u.isFinite && !u.isNaN) ? u * _usdcRate : 0.0;
 
   double xlmToFiat(double x) => (x.isFinite && !x.isNaN) ? x * _xlmRate : 0.0;
@@ -360,7 +321,7 @@ class CurrencyVM extends ChangeNotifier {
 
   bool supportsAssetPricing(AssetModel asset) =>
       _pricingKindForAsset(asset) != _AssetPricingKind.unsupported ||
-      _coingeckoIdForAsset(asset) != null;
+      _canResolveUnsupportedAssetPricing(asset);
 
   double assetUnitPriceFiat(AssetModel asset) {
     switch (_pricingKindForAsset(asset)) {
@@ -472,24 +433,24 @@ class CurrencyVM extends ChangeNotifier {
   }
 
   void _primeAssetMarketData(AssetModel asset, {bool needHistory = false}) {
-    final cgId = _coingeckoIdForAsset(asset);
-    if (cgId == null || cgId.isEmpty || _disposed) return;
+    if (!_canResolveUnsupportedAssetPricing(asset) || _disposed) return;
 
     final now = DateTime.now().toUtc();
     final priceAt = _assetUsdPriceAt[asset.id];
     if (!_assetPriceLoadsInFlight.contains(asset.id) &&
         (priceAt == null || now.difference(priceAt) > _assetPriceCacheTtl)) {
       _assetPriceLoadsInFlight.add(asset.id);
-      unawaited(_fetchAssetUsdPrice(asset, cgId));
+      unawaited(_fetchAssetUsdPrice(asset));
     }
 
     if (!needHistory) return;
 
     final historyAt = _assetUsdHistoryAt[asset.id];
     if (!_assetHistoryLoadsInFlight.contains(asset.id) &&
-        (historyAt == null || now.difference(historyAt) > _assetHistoryCacheTtl)) {
+        (historyAt == null ||
+            now.difference(historyAt) > _assetHistoryCacheTtl)) {
       _assetHistoryLoadsInFlight.add(asset.id);
-      unawaited(_fetchAssetUsdHistory(asset, cgId));
+      unawaited(_fetchAssetUsdHistory(asset));
     }
   }
 
@@ -507,62 +468,651 @@ class CurrencyVM extends ChangeNotifier {
     return null;
   }
 
-  Future<void> _fetchAssetUsdPrice(AssetModel asset, String cgId) async {
+  bool _canResolveUnsupportedAssetPricing(AssetModel asset) {
+    return _coingeckoIdForAsset(asset) != null ||
+        _canFetchStellarDexPricing(asset) ||
+        _assetSymbolForMarketData(asset) != null ||
+        _coinCapIdForAsset(asset) != null ||
+        _messariSlugForAsset(asset) != null;
+  }
+
+  bool _canFetchStellarDexPricing(AssetModel asset) {
+    return asset.chain.trim().toLowerCase() == 'stellar' &&
+        !asset.isNative &&
+        (asset.assetCode ?? '').trim().isNotEmpty &&
+        (asset.issuer ?? '').trim().isNotEmpty;
+  }
+
+  Map<String, String>? _stellarAssetQueryParams(
+    AssetModel asset, {
+    required String prefix,
+  }) {
+    final code = (asset.assetCode ?? '').trim();
+    final issuer = (asset.issuer ?? '').trim();
+    if (code.isEmpty || issuer.isEmpty) return null;
+    final type = code.length <= 4 ? 'credit_alphanum4' : 'credit_alphanum12';
+    return <String, String>{
+      '${prefix}_asset_type': type,
+      '${prefix}_asset_code': code,
+      '${prefix}_asset_issuer': issuer,
+    };
+  }
+
+  Map<String, String> _stellarNativeAssetQueryParams({required String prefix}) {
+    return <String, String>{'${prefix}_asset_type': 'native'};
+  }
+
+  String? _assetSymbolForMarketData(AssetModel asset) {
+    final candidates = <String>[
+      asset.symbol,
+      asset.assetCode ?? '',
+      ...asset.aliases,
+    ];
+    for (final candidate in candidates) {
+      final normalized = candidate.trim().toUpperCase();
+      if (normalized.isNotEmpty && normalized.length <= 12) return normalized;
+    }
+    return null;
+  }
+
+  String? _coinCapIdForAsset(AssetModel asset) {
+    const keys = <String>['coincap', 'coincapId', 'coincap_id'];
+    for (final key in keys) {
+      final value = asset.externalIds[key]?.trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+
+    final symbol = _assetSymbolForMarketData(asset);
+    return switch (symbol) {
+      'BTC' => 'bitcoin',
+      'ETH' => 'ethereum',
+      'XLM' => 'stellar',
+      'XRP' => 'xrp',
+      'SOL' => 'solana',
+      'ADA' => 'cardano',
+      'DOGE' => 'dogecoin',
+      'LTC' => 'litecoin',
+      'USDT' => 'tether',
+      'USDC' => 'usd-coin',
+      _ => null,
+    };
+  }
+
+  String? _messariSlugForAsset(AssetModel asset) {
+    const keys = <String>['messari', 'messariSlug', 'messari_slug'];
+    for (final key in keys) {
+      final value = asset.externalIds[key]?.trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+
+    final symbol = _assetSymbolForMarketData(asset);
+    return switch (symbol) {
+      'BTC' => 'bitcoin',
+      'ETH' => 'ethereum',
+      'XLM' => 'stellar',
+      'XRP' => 'xrp',
+      'SOL' => 'solana',
+      'ADA' => 'cardano',
+      'DOGE' => 'dogecoin',
+      'LTC' => 'litecoin',
+      'USDT' => 'tether',
+      'USDC' => 'usd-coin',
+      _ => null,
+    };
+  }
+
+  bool get _shouldBypassCoinGecko {
+    final until = _coinGeckoRateLimitedUntil;
+    return until != null && until.isAfter(DateTime.now().toUtc());
+  }
+
+  bool _isCoinGeckoRateLimitError(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('429') && text.contains('coingecko');
+  }
+
+  void _markCoinGeckoRateLimited() {
+    _coinGeckoRateLimitedUntil = DateTime.now().toUtc().add(
+      _coinGeckoRateLimitCooldown,
+    );
+    debugPrint(
+      'CurrencyVM: CoinGecko rate limited, '
+      'cooling down until $_coinGeckoRateLimitedUntil',
+    );
+  }
+
+  Future<void> _fetchAssetUsdPrice(AssetModel asset) async {
     try {
-      final url = Uri.parse(
-        'https://api.coingecko.com/api/v3/simple/price'
-        '?ids=${Uri.encodeQueryComponent(cgId)}'
-        '&vs_currencies=usd',
-      );
-      final payload = await _json(url);
-      final market = payload[cgId];
-      final usd = (market is Map ? market['usd'] : null);
-      final parsed = _toD(usd);
-      if (parsed != null) {
-        _assetUsdPriceById[asset.id] = parsed;
+      final price = await _fetchAssetUsdPriceWithFallbacks(asset);
+      if (price != null) {
+        _assetUsdPriceById[asset.id] = price;
         _assetUsdPriceAt[asset.id] = DateTime.now().toUtc();
         if (!_disposed) notifyListeners();
       }
     } catch (e) {
-      debugPrint('CurrencyVM: Asset price fetch failed for ${asset.symbol}: $e');
+      debugPrint(
+        'CurrencyVM: Asset price fetch failed for ${asset.symbol}: $e',
+      );
     } finally {
       _assetPriceLoadsInFlight.remove(asset.id);
     }
   }
 
-  Future<void> _fetchAssetUsdHistory(AssetModel asset, String cgId) async {
+  Future<void> _fetchAssetUsdHistory(AssetModel asset) async {
     try {
-      final url = Uri.parse(
-        'https://api.coingecko.com/api/v3/coins/${Uri.encodeComponent(cgId)}/market_chart'
-        '?vs_currency=usd&days=max&interval=daily',
-      );
-      final payload = await _json(url);
-      final raw = (payload['prices'] as List?) ?? const [];
-      final history = <double>[];
-      for (final point in raw) {
-        if (point is! List || point.length < 2) continue;
-        final price = _toD(point[1]);
-        if (price != null) history.add(price);
-      }
-      if (history.isNotEmpty) {
+      final history = await _fetchAssetUsdHistoryWithFallbacks(asset);
+      if (history != null && history.isNotEmpty) {
+        final now = DateTime.now().toUtc();
         _assetUsdHistoryById[asset.id] = history;
-        _assetUsdHistoryAt[asset.id] = DateTime.now().toUtc();
+        _assetUsdHistoryAt[asset.id] = now;
         _assetUsdPriceById[asset.id] = history.last;
-        _assetUsdPriceAt[asset.id] = DateTime.now().toUtc();
+        _assetUsdPriceAt[asset.id] = now;
         if (!_disposed) notifyListeners();
       }
     } catch (e) {
-      debugPrint('CurrencyVM: Asset history fetch failed for ${asset.symbol}: $e');
+      debugPrint(
+        'CurrencyVM: Asset history fetch failed for ${asset.symbol}: $e',
+      );
     } finally {
       _assetHistoryLoadsInFlight.remove(asset.id);
     }
+  }
+
+  Future<double?> _fetchAssetUsdPriceWithFallbacks(AssetModel asset) async {
+    final cgId = _coingeckoIdForAsset(asset);
+    final coinCapId = _coinCapIdForAsset(asset);
+    final messariSlug = _messariSlugForAsset(asset);
+    final symbol = _assetSymbolForMarketData(asset);
+
+    final attempts = <Future<double?> Function()>[
+      if (cgId != null && !_shouldBypassCoinGecko)
+        () => _fetchAssetUsdPriceFromCoinGecko(cgId),
+      if (_canFetchStellarDexPricing(asset))
+        () => _fetchAssetUsdPriceFromStellarDex(asset),
+      if (symbol != null) () => _fetchAssetUsdPriceFromCryptoCompare(symbol),
+      if (symbol != null) () => _fetchAssetUsdPriceFromCoinbase(symbol),
+      if (symbol != null) () => _fetchAssetUsdPriceFromBinance(symbol),
+      if (symbol != null) () => _fetchAssetUsdPriceFromKraken(symbol),
+      if (symbol != null) () => _fetchAssetUsdPriceFromBitfinex(symbol),
+      if (symbol != null) () => _fetchAssetUsdPriceFromKuCoin(symbol),
+      if (symbol != null) () => _fetchAssetUsdPriceFromOkx(symbol),
+      if (coinCapId != null) () => _fetchAssetUsdPriceFromCoinCap(coinCapId),
+      if (messariSlug != null)
+        () => _fetchAssetUsdPriceFromMessari(messariSlug),
+    ];
+
+    for (var i = 0; i < attempts.length; i++) {
+      try {
+        final value = await attempts[i]();
+        if (value != null && value.isFinite && value > 0) {
+          debugPrint(
+            'CurrencyVM: Asset price loaded for ${asset.symbol} from layer ${i + 1}',
+          );
+          return value;
+        }
+      } catch (e) {
+        if (_isCoinGeckoRateLimitError(e)) {
+          _markCoinGeckoRateLimited();
+        }
+        debugPrint(
+          'CurrencyVM: Asset price layer ${i + 1} failed for ${asset.symbol}: $e',
+        );
+      }
+    }
+
+    return _assetUsdPriceById[asset.id];
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryWithFallbacks(
+    AssetModel asset,
+  ) async {
+    final cgId = _coingeckoIdForAsset(asset);
+    final coinCapId = _coinCapIdForAsset(asset);
+    final messariSlug = _messariSlugForAsset(asset);
+    final symbol = _assetSymbolForMarketData(asset);
+
+    final attempts = <Future<List<double>?> Function()>[
+      if (cgId != null && !_shouldBypassCoinGecko)
+        () => _fetchAssetUsdHistoryFromCoinGecko(cgId),
+      if (_canFetchStellarDexPricing(asset))
+        () => _fetchAssetUsdHistoryFromStellarDex(asset),
+      if (symbol != null) () => _fetchAssetUsdHistoryFromCryptoCompare(symbol),
+      if (symbol != null) () => _fetchAssetUsdHistoryFromCoinbase(symbol),
+      if (symbol != null) () => _fetchAssetUsdHistoryFromBinance(symbol),
+      if (symbol != null) () => _fetchAssetUsdHistoryFromKraken(symbol),
+      if (symbol != null) () => _fetchAssetUsdHistoryFromBitfinex(symbol),
+      if (symbol != null) () => _fetchAssetUsdHistoryFromKuCoin(symbol),
+      if (symbol != null) () => _fetchAssetUsdHistoryFromOkx(symbol),
+      if (coinCapId != null) () => _fetchAssetUsdHistoryFromCoinCap(coinCapId),
+      if (messariSlug != null)
+        () => _fetchAssetUsdHistoryFromMessari(messariSlug),
+    ];
+
+    for (var i = 0; i < attempts.length; i++) {
+      try {
+        final history = await attempts[i]();
+        if (history != null && history.length >= 2) {
+          debugPrint(
+            'CurrencyVM: Asset history loaded for ${asset.symbol} from layer ${i + 1}',
+          );
+          return history;
+        }
+      } catch (e) {
+        if (_isCoinGeckoRateLimitError(e)) {
+          _markCoinGeckoRateLimited();
+        }
+        debugPrint(
+          'CurrencyVM: Asset history layer ${i + 1} failed for ${asset.symbol}: $e',
+        );
+      }
+    }
+
+    return _assetUsdHistoryById[asset.id];
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromStellarDex(AssetModel asset) async {
+    final history = await _fetchAssetUsdHistoryFromStellarDex(asset);
+    if (history == null || history.isEmpty) return null;
+    return history.last;
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromCoinGecko(String cgId) async {
+    final url = Uri.parse(
+      'https://api.coingecko.com/api/v3/simple/price'
+      '?ids=${Uri.encodeQueryComponent(cgId)}'
+      '&vs_currencies=usd',
+    );
+    final payload = await _json(url);
+    final market = payload[cgId];
+    return _toD(market is Map ? market['usd'] : null);
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromCoinCap(String assetId) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.coincap.io/v2/assets/${Uri.encodeComponent(assetId)}',
+      ),
+    );
+    final data = payload['data'];
+    return _toD(data is Map ? data['priceUsd'] : null);
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromCryptoCompare(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://min-api.cryptocompare.com/data/price'
+        '?fsym=${Uri.encodeQueryComponent(symbol)}&tsyms=USD',
+      ),
+    );
+    return _toD(payload['USD']);
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromCoinbase(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.exchange.coinbase.com/products/${Uri.encodeComponent(symbol)}-USD/ticker',
+      ),
+    );
+    return _toD(payload['price']);
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromBinance(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.binance.com/api/v3/ticker/price'
+        '?symbol=${Uri.encodeQueryComponent(symbol)}USDT',
+      ),
+    );
+    return _toD(payload['price']);
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromKraken(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.kraken.com/0/public/Ticker?pair=${Uri.encodeQueryComponent(symbol)}USD',
+      ),
+    );
+    final result = (payload['result'] as Map?) ?? const {};
+    for (final entry in result.entries) {
+      if (entry.key == 'last') continue;
+      final data = entry.value;
+      if (data is Map) {
+        final close = data['c'];
+        if (close is List && close.isNotEmpty) {
+          final parsed = _toD(close.first);
+          if (parsed != null) return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromBitfinex(String symbol) async {
+    final payload = await _jsonList(
+      Uri.parse(
+        'https://api-pub.bitfinex.com/v2/ticker/t${Uri.encodeQueryComponent(symbol)}USD',
+      ),
+    );
+    if (payload.length < 7) return null;
+    return _toD(payload[6]);
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromKuCoin(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.kucoin.com/api/v1/market/orderbook/level1'
+        '?symbol=${Uri.encodeQueryComponent(symbol)}-USDT',
+      ),
+    );
+    final data = payload['data'];
+    return _toD(data is Map ? data['price'] : null);
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromOkx(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://www.okx.com/api/v5/market/ticker'
+        '?instId=${Uri.encodeQueryComponent(symbol)}-USDT',
+      ),
+    );
+    final list = (payload['data'] as List?) ?? const [];
+    final item = list.isNotEmpty ? list.first : null;
+    return _toD(item is Map ? item['last'] : null);
+  }
+
+  Future<double?> _fetchAssetUsdPriceFromMessari(String slug) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://data.messari.io/api/v1/assets/${Uri.encodeComponent(slug)}/metrics',
+      ),
+    );
+    final data = payload['data'];
+    final marketData = data is Map ? data['market_data'] : null;
+    return _toD(marketData is Map ? marketData['price_usd'] : null);
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromCoinGecko(String cgId) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.coingecko.com/api/v3/coins/${Uri.encodeComponent(cgId)}/market_chart'
+        '?vs_currency=usd&days=max&interval=daily',
+      ),
+    );
+    final raw = (payload['prices'] as List?) ?? const [];
+    final history = <double>[];
+    for (final point in raw) {
+      if (point is! List || point.length < 2) continue;
+      final price = _toD(point[1]);
+      if (price != null) history.add(price);
+    }
+    return history.isEmpty ? null : history;
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromCoinCap(String assetId) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.coincap.io/v2/assets/${Uri.encodeComponent(assetId)}/history'
+        '?interval=d1',
+      ),
+    );
+    final raw = (payload['data'] as List?) ?? const [];
+    final history = <double>[];
+    for (final point in raw) {
+      final price = _toD((point as Map?)?['priceUsd']);
+      if (price != null) history.add(price);
+    }
+    return history.length >= 2 ? history : null;
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromCryptoCompare(
+    String symbol,
+  ) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://min-api.cryptocompare.com/data/v2/histoday'
+        '?fsym=${Uri.encodeQueryComponent(symbol)}&tsym=USD&limit=2000',
+      ),
+    );
+    final data = (payload['Data'] as Map?)?['Data'] as List? ?? const [];
+    final history = <double>[];
+    for (final point in data) {
+      final price = _toD((point as Map?)?['close']);
+      if (price != null) history.add(price);
+    }
+    return history.length >= 2 ? history : null;
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromCoinbase(String symbol) async {
+    final payload = await _jsonList(
+      Uri.parse(
+        'https://api.exchange.coinbase.com/products/${Uri.encodeQueryComponent(symbol)}-USD/candles'
+        '?granularity=86400&limit=350',
+      ),
+    );
+    final closes = _extractCloses(payload, closeIndex: 4);
+    return closes?.reversed.toList();
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromBinance(String symbol) async {
+    final payload = await _jsonList(
+      Uri.parse(
+        'https://api.binance.com/api/v3/klines'
+        '?symbol=${Uri.encodeQueryComponent(symbol)}USDT&interval=1d&limit=1000',
+      ),
+    );
+    return _extractCloses(payload, closeIndex: 4);
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromKraken(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.kraken.com/0/public/OHLC?pair=${Uri.encodeQueryComponent(symbol)}USD&interval=1440',
+      ),
+    );
+    final result = (payload['result'] as Map?) ?? const {};
+    String? dataKey;
+    for (final key in result.keys.cast<String>()) {
+      if (key != 'last') {
+        dataKey = key;
+        break;
+      }
+    }
+    if (dataKey == null) return null;
+    final data = (result[dataKey] as List?) ?? const [];
+    return _extractCloses(data, closeIndex: 4);
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromBitfinex(String symbol) async {
+    final payload = await _jsonList(
+      Uri.parse(
+        'https://api-pub.bitfinex.com/v2/candles/trade:1D:t${Uri.encodeQueryComponent(symbol)}USD/hist?limit=1000',
+      ),
+    );
+    final closes = _extractCloses(payload, closeIndex: 2);
+    return closes?.reversed.toList();
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromKuCoin(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://api.kucoin.com/api/v1/market/candles'
+        '?type=1day&symbol=${Uri.encodeQueryComponent(symbol)}-USDT',
+      ),
+    );
+    final data = (payload['data'] as List?) ?? const [];
+    final closes = _extractCloses(data, closeIndex: 2);
+    return closes?.reversed.toList();
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromOkx(String symbol) async {
+    final payload = await _json(
+      Uri.parse(
+        'https://www.okx.com/api/v5/market/candles'
+        '?instId=${Uri.encodeQueryComponent(symbol)}-USDT&bar=1D&limit=1000',
+      ),
+    );
+    final data = (payload['data'] as List?) ?? const [];
+    final closes = _extractCloses(data, closeIndex: 4);
+    return closes?.reversed.toList();
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromMessari(String slug) async {
+    final start = DateTime.now().toUtc().subtract(const Duration(days: 2000));
+    final end = DateTime.now().toUtc();
+    final payload = await _json(
+      Uri.parse(
+        'https://data.messari.io/api/v1/assets/${Uri.encodeComponent(slug)}/metrics/price/time-series'
+        '?interval=1d'
+        '&timestamp-format=rfc3339'
+        '&start=${Uri.encodeQueryComponent(start.toIso8601String())}'
+        '&end=${Uri.encodeQueryComponent(end.toIso8601String())}',
+      ),
+    );
+    final values = ((payload['data'] as Map?)?['values'] as List?) ?? const [];
+    final history = <double>[];
+    for (final point in values) {
+      if (point is! List || point.length < 2) continue;
+      final price = point.length > 4 ? _toD(point[4]) : _toD(point[1]);
+      if (price != null) history.add(price);
+    }
+    return history.length >= 2 ? history : null;
+  }
+
+  Future<List<double>?> _fetchAssetUsdHistoryFromStellarDex(
+    AssetModel asset,
+  ) async {
+    final assetParams = _stellarAssetQueryParams(asset, prefix: 'base');
+    if (assetParams == null) return null;
+
+    final usdcIssuer = _stellar.usdcIssuer.trim();
+    if (usdcIssuer.isNotEmpty) {
+      final usdcParams = <String, String>{
+        'counter_asset_type': 'credit_alphanum4',
+        'counter_asset_code': 'USDC',
+        'counter_asset_issuer': usdcIssuer,
+      };
+      final usdcSeries = await _fetchStellarTradeAggregationSeries(
+        baseParams: assetParams,
+        counterParams: usdcParams,
+      );
+      if (usdcSeries.length >= 2) {
+        return usdcSeries.map((point) => point.price).toList(growable: false);
+      }
+    }
+
+    final xlmSeries = await _fetchStellarTradeAggregationSeries(
+      baseParams: assetParams,
+      counterParams: _stellarNativeAssetQueryParams(prefix: 'counter'),
+    );
+    if (xlmSeries.length < 2) return null;
+
+    final xlmUsdSeries = await _fetchStellarTradeAggregationSeries(
+      baseParams: _stellarNativeAssetQueryParams(prefix: 'base'),
+      counterParams: <String, String>{
+        'counter_asset_type': 'credit_alphanum4',
+        'counter_asset_code': 'USDC',
+        'counter_asset_issuer': usdcIssuer,
+      },
+    );
+    if (xlmUsdSeries.length < 2) return null;
+
+    final xlmUsdByDay = <int, double>{};
+    for (final point in xlmUsdSeries) {
+      xlmUsdByDay[_dayBucketUtc(point.at)] = point.price;
+    }
+
+    final converted = <double>[];
+    double? lastKnownXlmUsd;
+    for (final point in xlmSeries) {
+      final xlmUsd =
+          xlmUsdByDay[_dayBucketUtc(point.at)] ??
+          lastKnownXlmUsd ??
+          _lastUsdcPerXlm;
+      if (xlmUsd <= 0 || !xlmUsd.isFinite) continue;
+      lastKnownXlmUsd = xlmUsd;
+      final usdPrice = point.price * xlmUsd;
+      if (usdPrice.isFinite && usdPrice > 0) {
+        converted.add(usdPrice);
+      }
+    }
+
+    return converted.length >= 2 ? converted : null;
+  }
+
+  Future<List<_TimedPricePoint>> _fetchStellarTradeAggregationSeries({
+    required Map<String, String> baseParams,
+    required Map<String, String> counterParams,
+    int days = 400,
+  }) async {
+    final now = DateTime.now().toUtc();
+    var start = now.subtract(Duration(days: days));
+    final unique = <int, _TimedPricePoint>{};
+
+    while (start.isBefore(now) && !_disposed) {
+      final end = start.add(const Duration(days: 180)).isAfter(now)
+          ? now
+          : start.add(const Duration(days: 180));
+      final params = <String, String>{
+        ...baseParams,
+        ...counterParams,
+        'resolution': '86400000',
+        'start_time': '${start.millisecondsSinceEpoch}',
+        'end_time': '${end.millisecondsSinceEpoch}',
+        'order': 'asc',
+        'limit': '200',
+      };
+      final url = Uri.https(
+        'horizon.stellar.org',
+        '/trade_aggregations',
+        params,
+      );
+      final payload = await _json(url);
+      final records =
+          (payload['_embedded']?['records'] as List?) ??
+          (payload['records'] as List?) ??
+          const [];
+      for (final record in records) {
+        final row = record as Map?;
+        final close = _toD(row?['close']);
+        final at = _tradeAggregationTimestamp(row);
+        if (close == null || at == null) continue;
+        unique[_dayBucketUtc(at)] = _TimedPricePoint(at: at, price: close);
+      }
+
+      if (end.isAtSameMomentAs(now)) break;
+      start = end.add(const Duration(milliseconds: 1));
+    }
+
+    final sorted = unique.values.toList()..sort((a, b) => a.at.compareTo(b.at));
+    return sorted;
+  }
+
+  DateTime? _tradeAggregationTimestamp(Map? row) {
+    final raw =
+        row?['timestamp'] ?? row?['timestamp_close'] ?? row?['timestamp_start'];
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw, isUtc: true);
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      final asInt = int.tryParse(raw);
+      if (asInt != null) {
+        return DateTime.fromMillisecondsSinceEpoch(asInt, isUtc: true);
+      }
+      return DateTime.tryParse(raw)?.toUtc();
+    }
+    return null;
+  }
+
+  int _dayBucketUtc(DateTime value) {
+    final utc = value.toUtc();
+    return DateTime.utc(utc.year, utc.month, utc.day).millisecondsSinceEpoch;
   }
 
   _AssetPricingKind _pricingKindForAsset(AssetModel asset) {
     final keys = _assetKeys(asset);
     final tags = asset.tags.map((e) => e.trim().toLowerCase()).toSet();
 
-    if (asset.isNative || keys.contains('XLM')) {
+    if (_isStellarXlmAsset(asset, keys: keys)) {
       return _AssetPricingKind.xlm;
     }
 
@@ -579,6 +1129,16 @@ class CurrencyVM extends ChangeNotifier {
       (asset.assetCode ?? '').trim().toUpperCase(),
       ...asset.aliases.map((alias) => alias.trim().toUpperCase()),
     }.where((value) => value.isNotEmpty).toSet();
+  }
+
+  bool _isStellarXlmAsset(AssetModel asset, {required Set<String> keys}) {
+    final chain = asset.chain.trim().toLowerCase();
+    if (chain != 'stellar') {
+      return keys.contains('XLM') && asset.isNative;
+    }
+
+    if (asset.isNative) return true;
+    return keys.contains('XLM');
   }
 
   bool _isUsdStableAsset(
@@ -645,16 +1205,13 @@ class CurrencyVM extends ChangeNotifier {
     return false;
   }
 
-  // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Future<void> _boot() async {
     try {
-      // Restore saved fiat preference.
       final savedFiat = await CurrencySecureStorage.readFiat();
       if (savedFiat != null && savedFiat.trim().isNotEmpty) {
         _fiat = savedFiat.trim().toLowerCase();
       }
 
-      // Seed UI immediately from cache (shows something before network).
       final cache = await CurrencySecureStorage.readLastGoodRates();
       if (cache != null) {
         _lastGoodRatesCache = cache;
@@ -662,10 +1219,18 @@ class CurrencyVM extends ChangeNotifier {
         if (cachedFiat == _fiat) {
           final usdc = (cache['usdcRate'] as num?)?.toDouble() ?? 0.0;
           final xlm = (cache['xlmRate'] as num?)?.toDouble() ?? 0.0;
+          final cachedUsdcPerXlm = (cache['lastUsdcPerXlm'] as num?)
+              ?.toDouble();
           if (usdc > 0 && xlm > 0) {
             _usdcRate = usdc;
             _xlmRate = xlm;
-            _lastUsdcPerXlm = _xlmRate / _usdcRate;
+            _lastUsdcPerXlm =
+                (cachedUsdcPerXlm != null &&
+                    cachedUsdcPerXlm.isFinite &&
+                    cachedUsdcPerXlm > 0)
+                ? cachedUsdcPerXlm
+                : (_xlmRate / _usdcRate);
+            _ratesForFiat = _fiat;
             _usingFallbackRates = true;
             final age = _getCacheAge(cache);
             debugPrint(
@@ -680,7 +1245,6 @@ class CurrencyVM extends ChangeNotifier {
       debugPrint('CurrencyVM: Error during boot cache load: $e');
     }
 
-    // Subscribe to live XLM/USDC price stream.
     _pairSub = _stellar.xlmUsdcPriceStream().listen(
       (p) {
         if (_disposed) return;
@@ -690,8 +1254,8 @@ class CurrencyVM extends ChangeNotifier {
           _ratesUnavailable = false;
           _usingFallbackRates = false;
           _recomputeXlmFiat();
-          _consecutiveErrors = 0;
-          _saveLatestPricesToCache(); // fire-and-forget; errors are swallowed inside
+          _streamConsecutiveErrors = 0;
+          unawaited(_saveLatestPricesToCache());
 
           if ((oldPrice - p.usdcPerXlm).abs() > 0.0001) {
             debugPrint(
@@ -704,14 +1268,11 @@ class CurrencyVM extends ChangeNotifier {
       },
       onError: (Object e) {
         debugPrint('CurrencyVM: Stream error: $e');
-        _consecutiveErrors++;
-        if (_consecutiveErrors >= _maxConsecutiveErrors) {
+        _streamConsecutiveErrors++;
+        if (_streamConsecutiveErrors >= _maxConsecutiveErrors) {
           debugPrint(
-            'CurrencyVM: ${'$_consecutiveErrors'} consecutive stream errors - zeroing rates',
+            'CurrencyVM: ${'$_streamConsecutiveErrors'} consecutive stream errors - zeroing rates',
           );
-          // FIX: _zeroRates does NOT call notifyListeners internally;
-          // caller is responsible. Stream listener calls notifyListeners
-          // via _recomputeXlmFiat so we must call it explicitly here.
           _ratesUnavailable = true;
           _usingFallbackRates = false;
           _usdcRate = 0;
@@ -723,7 +1284,6 @@ class CurrencyVM extends ChangeNotifier {
       cancelOnError: false,
     );
 
-    // Fetch initial rates and histories in parallel.
     await Future.wait([
       _refreshUsdToFiat(),
       _refreshXlmHistoriesWithFallbacks(),
@@ -753,7 +1313,6 @@ class CurrencyVM extends ChangeNotifier {
           _ratesUnavailable = false;
           _usingFallbackRates = false;
           _recomputeXlmFiat();
-          _consecutiveErrors = 0;
           _saveLatestPricesToCache();
 
           if ((oldPrice - p.usdcPerXlm).abs() > 0.0001) {
@@ -768,10 +1327,10 @@ class CurrencyVM extends ChangeNotifier {
       onError: (Object e) {
         debugPrint('CurrencyVM: Stream error: $e');
         _pairSub = null;
-        _consecutiveErrors++;
-        if (_consecutiveErrors >= _maxConsecutiveErrors) {
+        _streamConsecutiveErrors++;
+        if (_streamConsecutiveErrors >= _maxConsecutiveErrors) {
           debugPrint(
-            'CurrencyVM: ${'$_consecutiveErrors'} consecutive stream errors - zeroing rates',
+            'CurrencyVM: ${'$_streamConsecutiveErrors'} consecutive stream errors - zeroing rates',
           );
           _ratesUnavailable = true;
           _usingFallbackRates = false;
@@ -804,12 +1363,6 @@ class CurrencyVM extends ChangeNotifier {
     }
   }
 
-  // â”€â”€ Core Logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Zeros all live rates and marks them as unavailable.
-  ///
-  /// FIX: notifyListeners() removed from here â€” callers own the notification
-  /// boundary to avoid double-notify and post-dispose notify races.
   void _zeroRates(String reason) {
     if (_disposed) return;
     _usdcRate = 0;
@@ -830,11 +1383,10 @@ class CurrencyVM extends ChangeNotifier {
 
       if (fx != null && fx.isFinite && fx > 0) {
         _usdcRate = fx;
+        _ratesForFiat = _fiat;
         _ratesUnavailable = false;
         _usingFallbackRates = false;
         _lastRateRefresh = DateTime.now().toUtc();
-        _consecutiveErrors = 0;
-
         if (!_usdcCtrl.isClosed) _usdcCtrl.add(_usdcRate);
         _recomputeXlmFiat();
         await _saveLatestPricesToCache();
@@ -851,8 +1403,6 @@ class CurrencyVM extends ChangeNotifier {
     } catch (e) {
       if (_disposed) return;
       debugPrint('CurrencyVM: Error refreshing rates: $e');
-      _consecutiveErrors++;
-
       final restored = _tryRestoreRatesFromRecentCache();
       if (!restored) _zeroRates('fetch failed');
     } finally {
@@ -861,8 +1411,6 @@ class CurrencyVM extends ChangeNotifier {
     }
   }
 
-  /// Recomputes _xlmRate from _lastUsdcPerXlm Ã— _usdcRate.
-  /// Emits to stream and notifies listeners if values are valid.
   void _recomputeXlmFiat() {
     if (_disposed) return;
     if (_lastUsdcPerXlm > 0 &&
@@ -881,7 +1429,6 @@ class CurrencyVM extends ChangeNotifier {
     try {
       List<double>? history;
 
-      // 1) ALL-TIME via CEX
       history = await _fetchXlmUsdcDailyAllFromCex();
       if (!_disposed && history != null && history.length >= 2) {
         _applyDailySeries(history);
@@ -894,7 +1441,6 @@ class CurrencyVM extends ChangeNotifier {
         return;
       }
 
-      // 2) ALL-TIME via DEX
       history = await _fetchXlmUsdcDailyAllFromDex();
       if (!_disposed && history != null && history.length >= 2) {
         _applyDailySeries(history);
@@ -907,7 +1453,6 @@ class CurrencyVM extends ChangeNotifier {
         return;
       }
 
-      // 3) Recent CEX (~400 days)
       history = await _fetchXlmUsdcDailyFromCex();
       if (!_disposed && history != null && history.length >= 2) {
         _applyDailySeries(history);
@@ -920,7 +1465,6 @@ class CurrencyVM extends ChangeNotifier {
         return;
       }
 
-      // 4) Recent DEX
       history = await _fetchXlmUsdcDailyFromDex();
       if (!_disposed && history != null && history.length >= 2) {
         _applyDailySeries(history);
@@ -933,7 +1477,6 @@ class CurrencyVM extends ChangeNotifier {
         return;
       }
 
-      // 5) All live sources failed â€” use cache
       await _useCachedHistoryAsFallback();
       debugPrint('CurrencyVM: Using cached history as fallback');
     } catch (e) {
@@ -944,16 +1487,13 @@ class CurrencyVM extends ChangeNotifier {
     }
   }
 
-  /// Validates and applies a daily close series to the history slots.
-  /// FIX: was calling _useCachedHistoryAsFallback() synchronously inside a
-  /// sync method â€” now properly awaits via an internal async helper.
   void _applyDailySeries(List<double> dailyCloses) {
     if (_disposed || dailyCloses.isEmpty) return;
 
     final valid = dailyCloses.where((c) => c.isFinite && c > 0).toList();
     if (valid.isEmpty) {
       debugPrint('CurrencyVM: No valid close prices after filtering');
-      _applyDailyCacheFallbackAsync(); // fire-and-forget with proper async
+      _applyDailyCacheFallbackAsync();
       return;
     }
 
@@ -967,24 +1507,18 @@ class CurrencyVM extends ChangeNotifier {
     _xlmHist7 = _tail(capped, 7);
     _xlmHist24h = _tail(capped, 2);
 
-    // Seed spot price from history tail if stream hasn't provided one.
     if (_lastUsdcPerXlm <= 0 && capped.isNotEmpty) {
       _lastUsdcPerXlm = capped.last;
       _recomputeXlmFiat();
     }
   }
 
-  /// Async wrapper so _applyDailySeries can trigger a cache fallback
-  /// without being itself async (callers don't await it).
   void _applyDailyCacheFallbackAsync() {
-    _useCachedHistoryAsFallback(); // unawaited intentionally; errors are logged inside
+    _useCachedHistoryAsFallback();
   }
 
-  // â”€â”€ Cache Persistence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Persists the latest valid rates to secure storage.
-  /// Fire-and-forget safe â€” all errors are swallowed with a log.
   Future<void> _saveLatestPricesToCache() async {
+    if (_ratesForFiat != _fiat) return;
     if (_usdcRate <= 0 || _xlmRate <= 0 || _lastUsdcPerXlm <= 0) return;
     try {
       final data = {
@@ -1019,7 +1553,6 @@ class CurrencyVM extends ChangeNotifier {
       if (cache == null) return null;
       final raw = cache['history'];
       if (raw is List && raw.isNotEmpty) {
-        // Type-safe extraction; skip non-numeric values.
         final result = <double>[];
         for (final e in raw) {
           if (e is num && e.isFinite && e > 0) result.add(e.toDouble());
@@ -1053,10 +1586,6 @@ class CurrencyVM extends ChangeNotifier {
     }
   }
 
-  // â”€â”€ Rate Fallback Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Attempts to restore rates from in-memory cache within 3Ã— the normal TTL.
-  /// Returns true if restoration succeeded.
   bool _tryRestoreRatesFromRecentCache() {
     final cache = _lastGoodRatesCache;
     if (cache == null) return false;
@@ -1079,6 +1608,15 @@ class CurrencyVM extends ChangeNotifier {
     final usdcPerXlm = (cache['lastUsdcPerXlm'] as num?)?.toDouble();
 
     if (usdc <= 0 || xlm <= 0 || !usdc.isFinite || !xlm.isFinite) return false;
+    if (_isSuspiciousRateCache(
+      fiat: _fiat,
+      usdcRate: usdc,
+      xlmRate: xlm,
+      usdcPerXlm: usdcPerXlm,
+    )) {
+      debugPrint('CurrencyVM: Rejected suspicious cached rates for $_fiat');
+      return false;
+    }
 
     _usdcRate = usdc;
     _xlmRate = xlm;
@@ -1086,23 +1624,40 @@ class CurrencyVM extends ChangeNotifier {
         (usdcPerXlm != null && usdcPerXlm > 0 && usdcPerXlm.isFinite)
         ? usdcPerXlm
         : (xlm / usdc);
+    _ratesForFiat = _fiat;
     _ratesUnavailable = false;
     _usingFallbackRates = true;
     debugPrint('CurrencyVM: Restored cached rates (${age.inMinutes}m old)');
     return true;
   }
 
-  /// Returns true if [value] does not deviate more than [_maxSingleSourceJumpPct]
-  /// from the last cached rate for [tgt].
-  ///
-  /// FIX: Changed `<` to `<=` so a rate exactly equal to the threshold passes.
+  bool _isSuspiciousRateCache({
+    required String fiat,
+    required double usdcRate,
+    required double xlmRate,
+    required double? usdcPerXlm,
+  }) {
+    final normalizedFiat = fiat.trim().toLowerCase();
+    if (normalizedFiat == 'usd') return false;
+
+    final peggedUsdFiats = <String>{'bmd', 'bsd', 'pab'};
+    if (peggedUsdFiats.contains(normalizedFiat)) return false;
+
+    final quote = usdcPerXlm ?? (usdcRate > 0 ? xlmRate / usdcRate : 0.0);
+    if (quote <= 0 || !quote.isFinite) return false;
+
+    final rateLooksUsd = (usdcRate - 1.0).abs() <= 0.02;
+    final xlmMatchesUsdQuote = ((xlmRate - quote).abs() / quote) <= 0.02;
+    return rateLooksUsd && xlmMatchesUsdQuote;
+  }
+
   bool _isSingleSourceRateReasonable(double value, String tgt) {
     if (!value.isFinite || value <= 0 || value > 1_000_000) return false;
     final cache = _lastGoodRatesCache;
-    if (cache == null) return true; // No baseline â€” allow it
+    if (cache == null) return true;
     final cachedFiat = (cache['fiat'] as String?)?.toUpperCase();
     if (cachedFiat != tgt.toUpperCase()) {
-      return true; // Different fiat â€” allow it
+      return true;
     }
     final cached = (cache['usdcRate'] as num?)?.toDouble();
     if (cached == null || !cached.isFinite || cached <= 0) return true;
@@ -1110,53 +1665,134 @@ class CurrencyVM extends ChangeNotifier {
     return diffPct <= _maxSingleSourceJumpPct;
   }
 
-  // â”€â”€ USDâ†’FIAT Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Future<double?> _usdToFiat(String fiat) async {
     final tgt = fiat.toUpperCase();
     if (tgt == 'USD') return 1.0;
     return _withRetry(() => _fetchFiatRate(tgt), maxRetries: _maxRetries);
   }
 
-  /// Queries all FX sources in parallel and requires â‰¥2 sources within
-  /// [_maxFxSpreadPct]% of each other. Falls back to a single source only
-  /// if it passes a reasonableness check.
   Future<double?> _fetchFiatRate(String tgt) async {
-    final results = await Future.wait([
-      _fetchFromFrankfurter(tgt),
-      _fetchFromExchangeRateHost(tgt),
-      _fetchFromErApi(tgt),
-    ]);
+    final quotes = <_FxSourceQuote>[];
+    final fetchers = <({String source, Future<double?> Function() run})>[
+      (source: 'exchangerate.host', run: () => _fetchFromExchangeRateHost(tgt)),
+      (source: 'fixer.io', run: () => _fetchFromFixerIo(tgt)),
+      (
+        source: 'openexchangerates',
+        run: () => _fetchFromOpenExchangeRates(tgt),
+      ),
+      (source: 'frankfurter', run: () => _fetchFromFrankfurter(tgt)),
+    ];
 
-    final values =
-        results
-            .where((v) => v != null && v.isFinite && v > 0)
-            .cast<double>()
-            .toList()
-          ..sort();
+    for (final fetcher in fetchers) {
+      final value = await _safeFxSource(fetcher.source, fetcher.run);
+      if (value == null || !value.isFinite || value <= 0) continue;
 
-    if (values.isEmpty) return null;
-
-    if (values.length >= 2) {
-      // Use median as reference; include sources within spread tolerance.
-      final median = values[values.length ~/ 2];
-      final inBand = values.where((v) {
-        final pct = ((v - median).abs() / median) * 100.0;
-        return pct <=
-            _maxFxSpreadPct; // FIX: was `<`, now `<=` so exact-median values pass
-      }).toList();
-
-      if (inBand.length >= 2) {
-        return inBand.fold(0.0, (a, b) => a + b) / inBand.length;
+      quotes.add(_FxSourceQuote(source: fetcher.source, value: value));
+      final consensus = _selectConsensusFxRate(quotes);
+      if (consensus != null) {
+        debugPrint(
+          'CurrencyVM: FX consensus for $tgt locked from ${quotes.length} source(s) at $consensus',
+        );
+        return consensus;
       }
-      debugPrint('CurrencyVM: FX sources diverged for $tgt: $values');
-      return null;
     }
 
-    // Single source â€” validate against cached baseline.
-    final single = values.first;
-    if (_isSingleSourceRateReasonable(single, tgt)) return single;
-    debugPrint('CurrencyVM: Rejected single-source FX rate for $tgt: $single');
+    if (quotes.isEmpty) return null;
+
+    if (quotes.length == 1 &&
+        (_isSingleSourceRateReasonable(quotes.first.value, tgt) ||
+            _shouldTrustSingleLiveFxQuote(quotes.first, tgt))) {
+      return quotes.first.value;
+    }
+
+    final fallback = _bestReasonableFxFallback(quotes, tgt);
+    if (fallback != null) {
+      debugPrint(
+        'CurrencyVM: FX fallback for $tgt selected ${fallback.source} at ${fallback.value}',
+      );
+      return fallback.value;
+    }
+
+    debugPrint(
+      'CurrencyVM: FX sources diverged for $tgt: ${quotes.map((q) => '${q.source}=${q.value}').join(', ')}',
+    );
     return null;
+  }
+
+  Future<double?> _safeFxSource(
+    String source,
+    Future<double?> Function() fetcher,
+  ) async {
+    try {
+      final value = await fetcher();
+      if (value != null && value.isFinite && value > 0) {
+        debugPrint('CurrencyVM: FX source $source returned $value');
+      }
+      return value;
+    } catch (e) {
+      debugPrint('CurrencyVM: FX source $source failed: $e');
+      return null;
+    }
+  }
+
+  double? _selectConsensusFxRate(List<_FxSourceQuote> quotes) {
+    if (quotes.length < 2) return null;
+
+    List<_FxSourceQuote> bestCluster = const <_FxSourceQuote>[];
+    for (final anchor in quotes) {
+      final cluster = quotes
+          .where((quote) {
+            final pct =
+                ((quote.value - anchor.value).abs() / anchor.value) * 100.0;
+            return pct <= _maxFxSpreadPct;
+          })
+          .toList(growable: false);
+      if (cluster.length > bestCluster.length) {
+        bestCluster = cluster;
+      }
+    }
+
+    if (bestCluster.length < 2) return null;
+    final total = bestCluster.fold<double>(
+      0.0,
+      (sum, quote) => sum + quote.value,
+    );
+    return total / bestCluster.length;
+  }
+
+  _FxSourceQuote? _bestReasonableFxFallback(
+    List<_FxSourceQuote> quotes,
+    String tgt,
+  ) {
+    for (final quote in quotes) {
+      if (_isSingleSourceRateReasonable(quote.value, tgt) ||
+          _shouldTrustSingleLiveFxQuote(quote, tgt)) {
+        return quote;
+      }
+    }
+    return null;
+  }
+
+  bool _shouldTrustSingleLiveFxQuote(_FxSourceQuote quote, String tgt) {
+    final trustedSources = <String>{'frankfurter', 'exchangerate.host'};
+    if (!trustedSources.contains(quote.source)) return false;
+
+    final cache = _lastGoodRatesCache;
+    if (cache == null) return true;
+
+    final cachedFiat = (cache['fiat'] as String?)?.toLowerCase();
+    if (cachedFiat != tgt.toLowerCase()) return true;
+
+    final cachedUsdc = (cache['usdcRate'] as num?)?.toDouble() ?? 0.0;
+    final cachedXlm = (cache['xlmRate'] as num?)?.toDouble() ?? 0.0;
+    final cachedUsdcPerXlm = (cache['lastUsdcPerXlm'] as num?)?.toDouble();
+
+    return _isSuspiciousRateCache(
+      fiat: tgt,
+      usdcRate: cachedUsdc,
+      xlmRate: cachedXlm,
+      usdcPerXlm: cachedUsdcPerXlm,
+    );
   }
 
   Future<double?> _fetchFromFrankfurter(String tgt) async {
@@ -1176,13 +1812,38 @@ class CurrencyVM extends ChangeNotifier {
     return (v is num && v.isFinite && v > 0) ? v.toDouble() : null;
   }
 
-  Future<double?> _fetchFromErApi(String tgt) async {
-    final m = await _json(Uri.parse('https://open.er-api.com/v6/latest/USD'));
+  Future<double?> _fetchFromFixerIo(String tgt) async {
+    final apiKey = AppEnv.fixerApiKey;
+    if (apiKey == null || apiKey.isEmpty) return null;
+    final m = await _json(
+      Uri.parse(
+        'https://data.fixer.io/api/latest'
+        '?access_key=${Uri.encodeQueryComponent(apiKey)}'
+        '&symbols=USD,$tgt',
+      ),
+    );
+    if (m['success'] == false) return null;
+    final rates = (m['rates'] as Map?) ?? const {};
+    final usd = _toD(rates['USD']);
+    final target = _toD(rates[tgt]);
+    if (usd == null || target == null) return null;
+    return target / usd;
+  }
+
+  Future<double?> _fetchFromOpenExchangeRates(String tgt) async {
+    final appId = AppEnv.openExchangeRatesAppId;
+    if (appId == null || appId.isEmpty) return null;
+    final m = await _json(
+      Uri.parse(
+        'https://openexchangerates.org/api/latest.json'
+        '?app_id=${Uri.encodeQueryComponent(appId)}'
+        '&symbols=$tgt',
+      ),
+    );
     final v = (m['rates'] as Map?)?[tgt];
     return (v is num && v.isFinite && v > 0) ? v.toDouble() : null;
   }
 
-  // â”€â”€ CEX ALL-TIME Fetchers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Future<List<double>?> _fetchXlmUsdcDailyAllFromCex() async {
     return _firstNonNull<List<double>>([
       _cexBinanceDailyAll,
@@ -1216,13 +1877,11 @@ class CurrencyVM extends ChangeNotifier {
 
       if (firstOpenTime == null || batch.length < limit) break;
 
-      // FIX: Subtract 1 ms from oldest candle open time to paginate backward.
       final newEnd = firstOpenTime - 1;
-      if (endMs != null && newEnd >= endMs) break; // Infinite loop guard
+      if (endMs != null && newEnd >= endMs) break;
       endMs = newEnd;
     }
 
-    // Binance returns oldest-first already; no reversal needed.
     return closes.isEmpty ? null : closes;
   }
 
@@ -1235,7 +1894,6 @@ class CurrencyVM extends ChangeNotifier {
     while (guard++ < 15 && !_disposed) {
       final start = end.subtract(const Duration(days: chunkDays));
 
-      // FIX: Guard against paginating before XLM listing date (May 2019).
       if (start.isBefore(DateTime.utc(2019, 5, 1))) break;
 
       final url = Uri.parse(
@@ -1255,14 +1913,12 @@ class CurrencyVM extends ChangeNotifier {
       }
       if (batch.isEmpty) break;
 
-      // Coinbase returns latest-first; reverse to oldest-first before prepending.
       closes.insertAll(0, batch.reversed);
 
       if (arr.length < chunkDays) break;
 
-      // FIX: Advance end backward so we don't re-fetch the same window.
       final newEnd = start.subtract(const Duration(seconds: 1));
-      if (!newEnd.isBefore(end)) break; // Infinite loop guard
+      if (!newEnd.isBefore(end)) break;
       end = newEnd;
     }
 
@@ -1272,16 +1928,14 @@ class CurrencyVM extends ChangeNotifier {
   Future<List<double>?> _cexKucoinDailyAll() async {
     final closes = <double>[];
     int endAt = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-    // XLM listed on KuCoin around 2018-01-01.
     final listingEpoch =
         DateTime.utc(2018, 1, 1).millisecondsSinceEpoch ~/ 1000;
-    const chunkSec = 300 * 86400; // 300 days in seconds
+    const chunkSec = 300 * 86400;
     int guard = 0;
 
     while (guard++ < 15 && !_disposed) {
       final startAt = endAt - chunkSec;
 
-      // FIX: Guard against paginating before listing date.
       if (startAt < listingEpoch) break;
 
       final url = Uri.parse(
@@ -1305,7 +1959,6 @@ class CurrencyVM extends ChangeNotifier {
 
       if (arr.length < chunkSec ~/ 86400) break;
 
-      // FIX: Advance endAt backward; guard against infinite loop.
       final newEnd = startAt - 1;
       if (newEnd >= endAt) break;
       endAt = newEnd;
@@ -1314,7 +1967,6 @@ class CurrencyVM extends ChangeNotifier {
     return closes.isEmpty ? null : closes;
   }
 
-  // â”€â”€ CEX Recent Fetchers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Future<List<double>?> _fetchXlmUsdcDailyFromCex() async {
     return _firstNonNull<List<double>>([
       _cexBinanceDailyRecent,
@@ -1342,7 +1994,7 @@ class CurrencyVM extends ChangeNotifier {
       ),
     );
     final closes = _extractCloses(data, closeIndex: 4);
-    return closes?.reversed.toList(); // Reverse to oldest-first
+    return closes?.reversed.toList();
   }
 
   Future<List<double>?> _cexKucoinDailyRecent() async {
@@ -1374,7 +2026,6 @@ class CurrencyVM extends ChangeNotifier {
       ),
     );
     final result = (m['result'] as Map?) ?? {};
-    // FIX: Use explicit type-safe key search to avoid matching 'last'.
     String? dataKey;
     for (final key in result.keys.cast<String>()) {
       if (key != 'last') {
@@ -1396,7 +2047,6 @@ class CurrencyVM extends ChangeNotifier {
     final ohlcList = ((m['data'] as Map?)?['ohlc'] as List?) ?? [];
     if (ohlcList.isEmpty) return null;
 
-    // Sort ascending by timestamp.
     final sorted = List<dynamic>.from(ohlcList)
       ..sort((a, b) {
         final tsA =
@@ -1414,7 +2064,6 @@ class CurrencyVM extends ChangeNotifier {
     return closes.isEmpty ? null : closes;
   }
 
-  // â”€â”€ DEX Fetchers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Future<List<double>?> _fetchXlmUsdcDailyAllFromDex() async {
     final issuer = _stellar.usdcIssuer;
     final now = DateTime.now().toUtc();
@@ -1485,10 +2134,6 @@ class CurrencyVM extends ChangeNotifier {
     return closes.isEmpty ? null : closes;
   }
 
-  // â”€â”€ Low-level HTTP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Fetches a URL and parses it as a JSON object.
-  /// FIX: Response body is size-capped to [_maxResponseBytes] before parsing.
   Future<Map<String, dynamic>> _json(Uri url) async {
     final resp = await _client
         .get(url, headers: {'User-Agent': _userAgent})
@@ -1503,7 +2148,6 @@ class CurrencyVM extends ChangeNotifier {
     return decoded is Map<String, dynamic> ? decoded : {'_data': decoded};
   }
 
-  /// Fetches a URL and parses it as a JSON array.
   Future<List<dynamic>> _jsonList(Uri url) async {
     final resp = await _client
         .get(url, headers: {'User-Agent': _userAgent})
@@ -1518,8 +2162,6 @@ class CurrencyVM extends ChangeNotifier {
     return decoded is List ? decoded : [];
   }
 
-  /// Caps the response body to [_maxResponseBytes] characters.
-  /// Logs a warning if truncation occurs.
   String _capBody(String body, Uri url) {
     if (body.length <= _maxResponseBytes) return body;
     debugPrint(
@@ -1529,7 +2171,6 @@ class CurrencyVM extends ChangeNotifier {
     return body.substring(0, _maxResponseBytes);
   }
 
-  // â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   List<double> _tail(List<double> series, int n) {
     if (series.isEmpty) return const [];
     if (series.length <= n) return List<double>.from(series);
@@ -1555,8 +2196,6 @@ class CurrencyVM extends ChangeNotifier {
     return closes.isEmpty ? null : closes;
   }
 
-  /// Returns the age of a cache entry, or null if the timestamp is missing/invalid.
-  /// FIX: Uses UTC to avoid DST and timezone skew bugs.
   Duration? _getCacheAge(Map<dynamic, dynamic> cache) {
     final ts = cache['ts'];
     if (ts is! int) return null;
@@ -1567,7 +2206,6 @@ class CurrencyVM extends ChangeNotifier {
     return DateTime.now().toUtc().difference(cachedAt);
   }
 
-  /// Safely converts a dynamic value to a positive finite double, or null.
   double? _toD(dynamic v) {
     if (v == null) return null;
     double? d;
@@ -1579,7 +2217,6 @@ class CurrencyVM extends ChangeNotifier {
     return (d != null && d.isFinite && d > 0) ? d : null;
   }
 
-  /// Tries each factory in sequence and returns the first non-null result.
   Future<T?> _firstNonNull<T>(List<Future<T?> Function()> attempts) async {
     for (final fetcher in attempts) {
       if (_disposed) return null;
@@ -1593,10 +2230,6 @@ class CurrencyVM extends ChangeNotifier {
     return null;
   }
 
-  /// Retries [operation] up to [maxRetries] times with exponential back-off.
-  ///
-  /// FIX: On final attempt, rethrows the error so callers can fall back to cache.
-  /// FIX: Respects _disposed flag between retries.
   Future<T?> _withRetry<T>(
     Future<T?> Function() operation, {
     int maxRetries = 3,
@@ -1610,7 +2243,7 @@ class CurrencyVM extends ChangeNotifier {
           debugPrint('CurrencyVM: Max retries ($maxRetries) reached: $e');
           rethrow;
         }
-        final delay = _retryDelay * (1 << attempt); // 500ms, 1s, 2s
+        final delay = _retryDelay * (1 << attempt);
         debugPrint(
           'CurrencyVM: Retry ${attempt + 1}/$maxRetries after ${delay.inMilliseconds}ms',
         );

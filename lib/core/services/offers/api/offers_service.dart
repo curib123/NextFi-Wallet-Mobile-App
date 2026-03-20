@@ -11,10 +11,8 @@ import 'offers_endpoints.dart';
 typedef TokenProvider = Future<String?> Function();
 
 class OffersService {
-  OffersService({
-    required this.tokenProvider,
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  OffersService({required this.tokenProvider, http.Client? client})
+    : _client = client ?? http.Client();
 
   final TokenProvider tokenProvider;
   final http.Client _client;

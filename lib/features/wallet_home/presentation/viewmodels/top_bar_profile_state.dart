@@ -30,4 +30,3 @@ class TopBarProfileState {
 }
 
 const Object _sentinel = Object();
-

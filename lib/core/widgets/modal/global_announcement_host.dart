@@ -83,7 +83,9 @@ class _GlobalAnnouncementHostState extends State<GlobalAnnouncementHost>
       queue.addAll(active);
       if (version?.requiresForceUpdate == true) {
         final hasForceUpdateItem = queue.any(
-          (e) => e.type == AnnouncementType.update && (e.isForceUpdate || e.isCompulsory),
+          (e) =>
+              e.type == AnnouncementType.update &&
+              (e.isForceUpdate || e.isCompulsory),
         );
         if (!hasForceUpdateItem) {
           queue.insert(
@@ -138,7 +140,6 @@ class _GlobalAnnouncementHostState extends State<GlobalAnnouncementHost>
             await _service.acknowledge(item.id);
           } catch (e) {
             debugPrint('[announcements] acknowledge failed for ${item.id}: $e');
-            // Best-effort ack to avoid blocking UX on API failure.
           }
         }
       }

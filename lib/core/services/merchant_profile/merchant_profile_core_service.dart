@@ -30,14 +30,11 @@ class MerchantProfileCoreService {
     }
   }
 
-  /// Returns null if the user has not applied to be a merchant yet.
   Future<MerchantProfileModel?> getMe() async => _api.getMe();
 
-  /// Returns merchant tier progress (null when not available for current user).
   Future<MerchantTierProgressModel?> getTierProgress() async =>
       _api.getTierProgress();
 
-  /// Submit or re-submit a merchant application.
   Future<MerchantProfileModel> request(
     RequestMerchantProfileRequest req,
   ) async {
@@ -46,7 +43,6 @@ class MerchantProfileCoreService {
     return profile;
   }
 
-  /// Update merchant profile details (APPROVED merchants only).
   Future<MerchantProfileModel> updateMe(
     UpdateMerchantProfileRequest req,
   ) async {
@@ -55,7 +51,6 @@ class MerchantProfileCoreService {
     return profile;
   }
 
-  /// Update availability schedule (APPROVED merchants only).
   Future<MerchantProfileModel> updateAvailability(
     UpdateMerchantAvailabilityRequest req,
   ) async {
@@ -64,7 +59,6 @@ class MerchantProfileCoreService {
     return profile;
   }
 
-  /// Upload business documents. At least one file is required.
   Future<MerchantProfileModel> uploadBusinessDocs({
     File? businessDocument,
     File? authorizationLetter,
@@ -77,7 +71,6 @@ class MerchantProfileCoreService {
     return profile;
   }
 
-  /// Fetch the public profile of an approved merchant.
   Future<MerchantProfileModel?> getPublic(String userId) async =>
       _api.getPublic(userId);
 

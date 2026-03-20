@@ -10,7 +10,6 @@ class MerchantPaymentAccountModel {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
-  /// Nested payment method info returned by the API (read-only).
   final Map<String, dynamic>? paymentMethod;
 
   const MerchantPaymentAccountModel({
@@ -65,14 +64,10 @@ class MerchantPaymentAccountModel {
 
     return MerchantPaymentAccountModel(
       id: readString(const ['id']) ?? '',
-      merchantProfileId: readString(const [
-        'merchantProfileId',
-        'merchant_profile_id',
-      ]) ?? '',
-      paymentMethodId: readString(const [
-        'paymentMethodId',
-        'payment_method_id',
-      ]) ?? '',
+      merchantProfileId:
+          readString(const ['merchantProfileId', 'merchant_profile_id']) ?? '',
+      paymentMethodId:
+          readString(const ['paymentMethodId', 'payment_method_id']) ?? '',
       accountName: readString(const ['accountName', 'account_name']) ?? '',
       accountNo: readString(const ['accountNo', 'account_no']),
       label: readString(const ['label']),
@@ -86,8 +81,6 @@ class MerchantPaymentAccountModel {
     );
   }
 }
-
-// ── Pagination ─────────────────────────────────────────────────────────────────
 
 class MerchantPaymentAccountMeta {
   final int total;

@@ -1,9 +1,5 @@
 class ApiException implements Exception {
-  ApiException(
-    this.statusCode,
-    this.message, {
-    this.body,
-  });
+  ApiException(this.statusCode, this.message, {this.body});
 
   final int statusCode;
   final String message;

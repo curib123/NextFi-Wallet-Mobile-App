@@ -26,10 +26,17 @@ class AppEnv {
   static String get backendBaseUrl => _read('NEXTFI_BACKEND_BASE_URL');
   static String get federationDomain =>
       _read('NEXTFI_FEDERATION_DOMAIN', fallback: 'nextfi.app');
-  static String get usdcIssuerMainnet =>
-      _read('NEXTFI_USDC_ISSUER_MAINNET');
-  static String get usdcIssuerTestnet =>
-      _read('NEXTFI_USDC_ISSUER_TESTNET');
+  static String get usdcIssuerMainnet => _read('NEXTFI_USDC_ISSUER_MAINNET');
+  static String get usdcIssuerTestnet => _read('NEXTFI_USDC_ISSUER_TESTNET');
+  static String? get fixerApiKey {
+    final value = _read('NEXTFI_FIXER_API_KEY');
+    return value.isEmpty ? null : value;
+  }
+
+  static String? get openExchangeRatesAppId {
+    final value = _read('NEXTFI_OPEN_EXCHANGE_RATES_APP_ID');
+    return value.isEmpty ? null : value;
+  }
 
   static String? get quickNodeUrlMainnet {
     final value = _read('NEXTFI_QUICKNODE_URL_MAINNET');

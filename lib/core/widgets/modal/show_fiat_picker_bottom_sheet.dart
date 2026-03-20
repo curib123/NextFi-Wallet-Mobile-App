@@ -1,4 +1,3 @@
-// lib/common/components/fiat_picker_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -6,7 +5,6 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
-/// Call this to open the modal. Returns the selected fiat code (e.g., "php") or null if cancelled.
 Future<String?> showFiatPickerBottomSheet(BuildContext context) {
   return showAppModalBottomSheet<String>(
     context,
@@ -109,7 +107,6 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle
               Container(
                 width: 40,
                 height: 4,
@@ -120,7 +117,6 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                 ),
               ),
 
-              // Header
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
@@ -193,7 +189,6 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
 
               const SizedBox(height: 16),
 
-              // Search bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
@@ -241,7 +236,6 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
 
               const SizedBox(height: 16),
 
-              // Currently selected indicator
               if (_searchQuery.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -281,7 +275,6 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
 
               const SizedBox(height: 12),
 
-              // Currency list
               if (filteredFiats.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(40),
@@ -402,7 +395,6 @@ class _CurrencyTileState extends State<_CurrencyTile> {
         ),
         child: Row(
           children: [
-            // Flag
             Container(
               width: 44,
               height: 44,
@@ -418,7 +410,6 @@ class _CurrencyTileState extends State<_CurrencyTile> {
             ),
             const SizedBox(width: 14),
 
-            // Currency info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,7 +462,6 @@ class _CurrencyTileState extends State<_CurrencyTile> {
               ),
             ),
 
-            // Selection indicator
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 28,
@@ -497,12 +487,10 @@ class _CurrencyTileState extends State<_CurrencyTile> {
   }
 }
 
-/// ---- Fiat options (common & PH-focused set) ----
-/// Add/remove freely; codes should be lowercase to match CurrencyProvider.
 class FiatOption {
-  final String code; // e.g., "usd"
-  final String name; // e.g., "US Dollar"
-  final String flag; // emoji flag
+  final String code;
+  final String name;
+  final String flag;
   const FiatOption(this.code, this.name, this.flag);
 }
 

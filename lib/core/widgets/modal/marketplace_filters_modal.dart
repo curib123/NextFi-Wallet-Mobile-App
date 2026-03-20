@@ -352,7 +352,9 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
                             Text(
                               '$activeCount',
                               style: TextStyle(
-                                color: activeCount > 0 ? c.primary : c.textPrimary,
+                                color: activeCount > 0
+                                    ? c.primary
+                                    : c.textPrimary,
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.4,
@@ -437,9 +439,10 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
                                 hint: 'Range overlap start',
                                 icon: Icons.south_west_rounded,
                                 action: TextInputAction.next,
-                                keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 c: c,
                               ),
                             ),
@@ -451,9 +454,10 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
                                 hint: 'Range overlap end',
                                 icon: Icons.north_east_rounded,
                                 action: TextInputAction.next,
-                                keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 c: c,
                               ),
                             ),
@@ -490,7 +494,9 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
                             ),
                           ],
                           onChanged: (value) => setState(() {
-                            _filters = _filters.copyWith(paymentMethodId: value);
+                            _filters = _filters.copyWith(
+                              paymentMethodId: value,
+                            );
                           }),
                         ),
                         const SizedBox(height: 14),
@@ -521,7 +527,8 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
                           value: _filters.sortOrder,
                           options: OfferSortOrder.values,
                           labelBuilder: (value) =>
-                              value.name[0].toUpperCase() + value.name.substring(1),
+                              value.name[0].toUpperCase() +
+                              value.name.substring(1),
                           onChanged: (value) => setState(() {
                             _filters = _filters.copyWith(sortOrder: value);
                           }),
@@ -550,9 +557,7 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
                     onPressed: () => _close(const MarketOfferFilters()),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 52),
-                      side: BorderSide(
-                        color: c.border.withValues(alpha: 0.85),
-                      ),
+                      side: BorderSide(color: c.border.withValues(alpha: 0.85)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),

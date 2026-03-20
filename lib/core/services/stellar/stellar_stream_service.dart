@@ -1,4 +1,3 @@
-// stellar_stream_service.dart
 import 'dart:async';
 import 'dart:convert';
 
@@ -9,8 +8,6 @@ import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_fee_service.dart';
 import 'package:next_fi/core/services/stellar/wallet_models.dart';
 
-
-/// Service for real-time streaming data
 class StellarStreamService extends StellarBaseService {
   final String usdcIssuer;
   final StellarFeeService feeService;
@@ -48,27 +45,21 @@ class StellarStreamService extends StellarBaseService {
     }
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Payment Streams
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Stream<PaymentOperationResponse> paymentsStream(String accountId) {
     Stream<PaymentOperationResponse> build(StellarSDK s) {
       return s.payments
           .forAccount(accountId)
           .cursor("now")
           .stream()
-          .where((resp) =>
-      resp is PaymentOperationResponse && resp.transactionSuccessful)
+          .where(
+            (resp) =>
+                resp is PaymentOperationResponse && resp.transactionSuccessful,
+          )
           .cast<PaymentOperationResponse>();
     }
 
     return sseWithFallback<PaymentOperationResponse>(build);
   }
-
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Account State Stream
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Stream<AccountState> accountStateStream(String accountId) {
     final controller = StreamController<AccountState>();
@@ -103,11 +94,13 @@ class StellarStreamService extends StellarBaseService {
           }
         }
 
-        controller.add(AccountState(
-          balancesByAssetKey: balancesByAssetKey,
-          trustlinesByAssetKey: trustlinesByAssetKey,
-          updatedAt: DateTime.now(),
-        ));
+        controller.add(
+          AccountState(
+            balancesByAssetKey: balancesByAssetKey,
+            trustlinesByAssetKey: trustlinesByAssetKey,
+            updatedAt: DateTime.now(),
+          ),
+        );
       } catch (e, st) {
         if (!closed) {
           controller.addError(e, st);
@@ -123,7 +116,7 @@ class StellarStreamService extends StellarBaseService {
         s.effects.forAccount(accountId).cursor("now").stream().map((_) {});
 
     final pay = sseWithFallback<void>(payStream).listen(
-          (_) {
+      (_) {
         coolDown?.cancel();
         coolDown = Timer(const Duration(milliseconds: 250), emitSnapshot);
       },
@@ -133,7 +126,7 @@ class StellarStreamService extends StellarBaseService {
     );
 
     final eff = sseWithFallback<void>(effStream).listen(
-          (_) {
+      (_) {
         coolDown?.cancel();
         coolDown = Timer(const Duration(milliseconds: 250), emitSnapshot);
       },
@@ -152,10 +145,6 @@ class StellarStreamService extends StellarBaseService {
     return controller.stream;
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Fee Estimate Stream
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Stream<FeeEstimate> feeEstimateStream({
     int opCount = 1,
     int percentile = 90,
@@ -166,7 +155,9 @@ class StellarStreamService extends StellarBaseService {
     Future<void> push(DateTime at) async {
       try {
         final x = await feeService.estimateNetworkFeeXlm(
-            opCount: opCount, percentile: percentile);
+          opCount: opCount,
+          percentile: percentile,
+        );
 
         int base = 100;
         try {
@@ -185,15 +176,17 @@ class StellarStreamService extends StellarBaseService {
         final perOp = (x * 1e7 / ops).round();
         final total = (x * 1e7).round();
 
-        controller.add(FeeEstimate(
-          perOpStroops: perOp,
-          totalStroops: total,
-          totalXlm: x,
-          baseFee: base,
-          opCount: ops,
-          percentile: percentile.clamp(10, 99),
-          ledgerClosedAt: at,
-        ));
+        controller.add(
+          FeeEstimate(
+            perOpStroops: perOp,
+            totalStroops: total,
+            totalXlm: x,
+            baseFee: base,
+            opCount: ops,
+            percentile: percentile.clamp(10, 99),
+            ledgerClosedAt: at,
+          ),
+        );
       } catch (e, st) {
         controller.addError(e, st);
       }
@@ -205,7 +198,7 @@ class StellarStreamService extends StellarBaseService {
         s.ledgers.cursor("now").stream().map((_) {});
 
     final ledSub = sseWithFallback<void>(ledgerStream).listen(
-          (_) => push(DateTime.now()),
+      (_) => push(DateTime.now()),
       onError: controller.addError,
       onDone: controller.close,
     );
@@ -232,21 +225,13 @@ class StellarStreamService extends StellarBaseService {
     return controller.stream;
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Price Streams
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
   Stream<PairPrice> assetPairPriceStream({
     required Asset baseAsset,
     required Asset counterAsset,
   }) {
     Stream<PairPrice> build(StellarSDK s) {
       final tradesBuilder = s.trades;
-      _putAssetQuery(
-        tradesBuilder.queryParameters,
-        baseAsset,
-        role: 'base',
-      );
+      _putAssetQuery(tradesBuilder.queryParameters, baseAsset, role: 'base');
       _putAssetQuery(
         tradesBuilder.queryParameters,
         counterAsset,
@@ -299,7 +284,8 @@ class StellarStreamService extends StellarBaseService {
       );
 
   Stream<double> quoteUsdcToXlmStream(double sendAmountUsdc) =>
-      assetPairPriceStream(baseAsset: usdc, counterAsset: xlm).map(
-        (p) => sendAmountUsdc * p.counterPerBase,
-      );
+      assetPairPriceStream(
+        baseAsset: usdc,
+        counterAsset: xlm,
+      ).map((p) => sendAmountUsdc * p.counterPerBase);
 }

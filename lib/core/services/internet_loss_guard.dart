@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 
 class InternetLossGuard extends StatefulWidget {
-  const InternetLossGuard({
-    super.key,
-    required this.child,
-  });
+  const InternetLossGuard({super.key, required this.child});
 
   final Widget child;
 

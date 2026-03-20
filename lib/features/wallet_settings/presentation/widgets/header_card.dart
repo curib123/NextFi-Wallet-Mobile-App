@@ -1,4 +1,3 @@
-// lib/features/wallet_settings/view/widgets/header_card_refined.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -29,10 +28,7 @@ class HeaderCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            colors.surface,
-            colors.surface.withValues(alpha: 0.8),
-          ],
+          colors: [colors.surface, colors.surface.withValues(alpha: 0.8)],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
@@ -55,10 +51,8 @@ class HeaderCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Wallet header with icon and status
           Row(
             children: [
-              // Wallet icon with gradient background
               Container(
                 width: 56,
                 height: 56,
@@ -84,7 +78,6 @@ class HeaderCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              // Wallet name
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,7 +107,6 @@ class HeaderCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              // Status pill with animation
               _AnimatedStatusPill(
                 icon: obscured ? LucideIcons.lock : LucideIcons.unlock,
                 label: obscured ? 'Secured' : 'Visible',
@@ -125,7 +117,6 @@ class HeaderCard extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Divider with gradient
           Container(
             height: 1,
             decoration: BoxDecoration(
@@ -141,7 +132,6 @@ class HeaderCard extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Quick actions with modern design
           Row(
             children: [
               Expanded(
@@ -225,21 +215,19 @@ class _ModernQuickActionState extends State<_ModernQuickAction> {
           boxShadow: _isPressed
               ? []
               : [
-            BoxShadow(
-              color: AppColor.of(context).textPrimary.withValues(alpha: 0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
+                  BoxShadow(
+                    color: AppColor.of(
+                      context,
+                    ).textPrimary.withValues(alpha: 0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              widget.icon,
-              size: 20,
-              color: widget.colors.textPrimary,
-            ),
+            Icon(widget.icon, size: 20, color: widget.colors.textPrimary),
             const SizedBox(height: 6),
             Text(
               widget.label,
@@ -284,10 +272,7 @@ class _AnimatedStatusPill extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: color.withValues(alpha: 0.1),

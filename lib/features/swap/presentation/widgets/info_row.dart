@@ -1,4 +1,3 @@
-// lib/features/swap/view/widgets/info_row.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 

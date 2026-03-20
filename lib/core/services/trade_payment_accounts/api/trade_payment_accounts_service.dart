@@ -9,8 +9,10 @@ import 'trade_payment_accounts_endpoints.dart';
 typedef TokenProvider = Future<String?> Function();
 
 class TradePaymentAccountsService {
-  TradePaymentAccountsService({required this.tokenProvider, http.Client? client})
-    : _client = client ?? http.Client();
+  TradePaymentAccountsService({
+    required this.tokenProvider,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   final TokenProvider tokenProvider;
   final http.Client _client;
@@ -26,7 +28,10 @@ class TradePaymentAccountsService {
     };
   }
 
-  Map<String, dynamic>? _extractMap(dynamic data, {List<String> keys = const []}) {
+  Map<String, dynamic>? _extractMap(
+    dynamic data, {
+    List<String> keys = const [],
+  }) {
     if (data is Map<String, dynamic>) {
       for (final key in keys) {
         final wrapped = data[key];
