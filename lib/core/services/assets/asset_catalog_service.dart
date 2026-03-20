@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/core/services/assets/asset_catalog_policy.dart';
 import 'package:next_fi/core/services/base_url/base_url.dart';
 
 class AssetCatalogService {
@@ -28,10 +29,12 @@ class AssetCatalogService {
     final decoded = jsonDecode(res.body);
     if (decoded is! List) return const [];
 
-    return decoded
-        .whereType<Map>()
-        .map((item) => AssetModel.fromJson(Map<String, dynamic>.from(item)))
-        .toList(growable: false);
+    return AssetCatalogPolicy.filterSupportedAssets(
+      decoded
+          .whereType<Map>()
+          .map((item) => AssetModel.fromJson(Map<String, dynamic>.from(item)))
+          .toList(growable: false),
+    );
   }
 
   Future<List<AssetModel>> readCachedAssets() async {
@@ -42,10 +45,12 @@ class AssetCatalogService {
       final decoded = jsonDecode(raw);
       if (decoded is! List) return const [];
 
-      return decoded
-          .whereType<Map>()
-          .map((item) => AssetModel.fromJson(Map<String, dynamic>.from(item)))
-          .toList(growable: false);
+      return AssetCatalogPolicy.filterSupportedAssets(
+        decoded
+            .whereType<Map>()
+            .map((item) => AssetModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList(growable: false),
+      );
     } catch (_) {
       return const [];
     }
@@ -53,9 +58,12 @@ class AssetCatalogService {
 
   Future<void> writeCachedAssets(List<AssetModel> assets) async {
     try {
+      final supportedAssets = AssetCatalogPolicy.filterSupportedAssets(assets);
       await _store.write(
         key: _catalogCacheKey,
-        value: jsonEncode(assets.map((asset) => asset.toJson()).toList()),
+        value: jsonEncode(
+          supportedAssets.map((asset) => asset.toJson()).toList(),
+        ),
       );
       await _store.write(
         key: _catalogCacheUpdatedAtKey,

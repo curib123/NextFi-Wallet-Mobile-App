@@ -94,7 +94,7 @@ class _ThemeSelectorSheet extends StatelessWidget {
           Text('Theme Style', style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'Choose one of 10 accent styles.',
+            'Choose one of the blue theme variants.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colors.textSecondary,
             ),

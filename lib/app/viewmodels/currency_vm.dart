@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:next_fi/app/env/app_env.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/app/viewmodels/currency_math.dart';
+import 'package:next_fi/core/services/base_url/base_url.dart';
 import 'package:next_fi/core/services/secure_storage/currency_secure_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
@@ -51,6 +52,7 @@ class CurrencyVM extends ChangeNotifier {
   static const double _maxFxSpreadPct = 3.0;
   static const double _maxSingleSourceJumpPct = 20.0;
   static const Duration _coinGeckoRateLimitCooldown = Duration(minutes: 3);
+  static const Duration _backendWalletSummaryCacheTtl = Duration(seconds: 10);
 
   static const int _maxResponseBytes = 10 * 1024 * 1024;
 
@@ -68,17 +70,17 @@ class CurrencyVM extends ChangeNotifier {
 
   static const Map<String, String> _symbolOverrides = <String, String>{
     'USD': r'$',
-    'EUR': 'â‚¬',
+    'EUR': '€',
     'GBP': 'GBP',
     'JPY': 'JPY',
     'CNY': 'CNY',
-    'KRW': 'â‚©',
-    'PHP': 'â‚±',
-    'THB': 'à¸¿',
-    'VND': 'â‚«',
+    'KRW': '₩',
+    'PHP': '₱',
+    'THB': '฿',
+    'VND': '₫',
     'IDR': 'Rp',
-    'INR': 'â‚¹',
-    'RUB': 'â‚½',
+    'INR': '₹',
+    'RUB': '₽',
     'AUD': r'$',
     'CAD': r'$',
     'NZD': r'$',
@@ -86,18 +88,18 @@ class CurrencyVM extends ChangeNotifier {
     'HKD': r'$',
     'TWD': r'$',
     'MYR': 'RM',
-    'AED': 'Ø¯.Ø¥',
-    'SAR': 'ï·¼',
-    'QAR': 'Ø±.Ù‚',
-    'KWD': 'Ø¯.Ùƒ',
-    'BHD': 'Ø¯.Ø¨',
-    'OMR': 'Ø±.Ø¹.',
+    'AED': 'د.إ',
+    'SAR': '﷼',
+    'QAR': 'ر.ق',
+    'KWD': 'د.ك',
+    'BHD': 'د.ب',
+    'OMR': 'ر.ع.',
     'ZAR': 'R',
     'BRL': 'R\$',
     'MXN': r'$',
-    'NGN': 'â‚¦',
+    'NGN': '₦',
     'EGP': 'EGP',
-    'TRY': 'â‚º',
+    'TRY': '₺',
   };
 
   late final IOClient _client;
@@ -131,6 +133,9 @@ class CurrencyVM extends ChangeNotifier {
 
   Map<String, dynamic>? _lastGoodRatesCache;
   List<double>? _lastGoodHistoryCache;
+  Map<String, dynamic>? _backendWalletSummaryCache;
+  DateTime? _backendWalletSummaryAt;
+  Future<Map<String, dynamic>>? _backendWalletSummaryInFlight;
 
   final _xlmCtrl = StreamController<double>.broadcast();
   final _usdcCtrl = StreamController<double>.broadcast();
@@ -238,7 +243,7 @@ class CurrencyVM extends ChangeNotifier {
     _usingFallbackRates = false;
     await CurrencySecureStorage.saveFiat(n);
     _lastRateRefresh = null;
-    await _refreshUsdToFiat();
+    await _refreshUsdToFiat(force: true);
     notifyListeners();
   }
 
@@ -251,7 +256,7 @@ class CurrencyVM extends ChangeNotifier {
     _usingFallbackRates = false;
     _lastRateRefresh = null;
     await CurrencySecureStorage.clearFiat();
-    await _refreshUsdToFiat();
+    await _refreshUsdToFiat(force: true);
     notifyListeners();
   }
 
@@ -260,7 +265,7 @@ class CurrencyVM extends ChangeNotifier {
       debugPrint('CurrencyVM: Using cached rates');
       return;
     }
-    await _refreshUsdToFiat();
+    await _refreshUsdToFiat(force: force);
   }
 
   Future<void> refreshHistory({bool force = false}) async {
@@ -268,7 +273,7 @@ class CurrencyVM extends ChangeNotifier {
       debugPrint('CurrencyVM: Using cached history');
       return;
     }
-    await _refreshXlmHistoriesWithFallbacks();
+    await _refreshXlmHistoriesWithFallbacks(force: force);
   }
 
   void handleConnectivityChanged({
@@ -1259,7 +1264,7 @@ class CurrencyVM extends ChangeNotifier {
           if ((oldPrice - p.usdcPerXlm).abs() > 0.0001) {
             debugPrint(
               'CurrencyVM: Stream updated: '
-              '${p.usdcPerXlm} USDC/XLM â†’ '
+              '${p.usdcPerXlm} USDC/XLM → '
               '${_xlmRate.toStringAsFixed(4)} $_fiat/XLM',
             );
           }
@@ -1284,8 +1289,8 @@ class CurrencyVM extends ChangeNotifier {
     );
 
     await Future.wait([
-      _refreshUsdToFiat(),
-      _refreshXlmHistoriesWithFallbacks(),
+      _refreshUsdToFiat(force: true),
+      _refreshXlmHistoriesWithFallbacks(force: true),
     ]);
 
     _setLoading(false);
@@ -1372,16 +1377,24 @@ class CurrencyVM extends ChangeNotifier {
     debugPrint('CurrencyVM: Rates zeroed ($reason) - UI should show N/A');
   }
 
-  Future<void> _refreshUsdToFiat() async {
+  Future<void> _refreshUsdToFiat({bool force = false}) async {
     if (_disposed) return;
     _setLoading(true);
 
     try {
-      final fx = await _usdToFiat(_fiat);
+      final summary = await _fetchBackendWalletSummary(force: force);
+      final fx = _toD(summary['usdToFiat']);
+      final xlmUsdc = _toD(summary['xlmUsdc']);
+      final history = _parseBackendDailyHistory(summary);
       if (_disposed) return;
 
       if (fx != null && fx.isFinite && fx > 0) {
         _usdcRate = fx;
+        if (xlmUsdc != null && xlmUsdc.isFinite && xlmUsdc > 0) {
+          _lastUsdcPerXlm = xlmUsdc;
+        } else if (_lastUsdcPerXlm <= 0 && history.length >= 2) {
+          _lastUsdcPerXlm = history.last;
+        }
         _ratesForFiat = _fiat;
         _ratesUnavailable = false;
         _usingFallbackRates = false;
@@ -1422,56 +1435,23 @@ class CurrencyVM extends ChangeNotifier {
     }
   }
 
-  Future<void> _refreshXlmHistoriesWithFallbacks() async {
+  Future<void> _refreshXlmHistoriesWithFallbacks({bool force = false}) async {
     if (_disposed) return;
 
     try {
-      List<double>? history;
-
-      history = await _fetchXlmUsdcDailyAllFromCex();
-      if (!_disposed && history != null && history.length >= 2) {
+      final summary = await _fetchBackendWalletSummary(force: force);
+      final history = _parseBackendDailyHistory(summary);
+      final xlmUsdc = _toD(summary['xlmUsdc']);
+      if (!_disposed && history.length >= 2) {
+        if (xlmUsdc != null && xlmUsdc.isFinite && xlmUsdc > 0) {
+          _lastUsdcPerXlm = xlmUsdc;
+        }
         _applyDailySeries(history);
         _lastGoodHistoryCache = history;
         _lastHistoryRefresh = DateTime.now().toUtc();
         await _saveHistoryToCache(history);
         debugPrint(
-          'CurrencyVM: Loaded ${history.length} days from CEX (all-time)',
-        );
-        return;
-      }
-
-      history = await _fetchXlmUsdcDailyAllFromDex();
-      if (!_disposed && history != null && history.length >= 2) {
-        _applyDailySeries(history);
-        _lastGoodHistoryCache = history;
-        _lastHistoryRefresh = DateTime.now().toUtc();
-        await _saveHistoryToCache(history);
-        debugPrint(
-          'CurrencyVM: Loaded ${history.length} days from DEX (all-time)',
-        );
-        return;
-      }
-
-      history = await _fetchXlmUsdcDailyFromCex();
-      if (!_disposed && history != null && history.length >= 2) {
-        _applyDailySeries(history);
-        _lastGoodHistoryCache = history;
-        _lastHistoryRefresh = DateTime.now().toUtc();
-        await _saveHistoryToCache(history);
-        debugPrint(
-          'CurrencyVM: Loaded ${history.length} days from CEX (recent)',
-        );
-        return;
-      }
-
-      history = await _fetchXlmUsdcDailyFromDex();
-      if (!_disposed && history != null && history.length >= 2) {
-        _applyDailySeries(history);
-        _lastGoodHistoryCache = history;
-        _lastHistoryRefresh = DateTime.now().toUtc();
-        await _saveHistoryToCache(history);
-        debugPrint(
-          'CurrencyVM: Loaded ${history.length} days from DEX (recent)',
+          'CurrencyVM: Loaded ${history.length} daily closes from backend',
         );
         return;
       }
@@ -1583,6 +1563,52 @@ class CurrencyVM extends ChangeNotifier {
         debugPrint('CurrencyVM: No cached history available');
       }
     }
+  }
+
+  Future<Map<String, dynamic>> _fetchBackendWalletSummary({
+    bool force = false,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final cached = _backendWalletSummaryCache;
+    final cachedFiat = (cached?['fiat'] as String?)?.trim().toLowerCase();
+    if (!force &&
+        cached != null &&
+        cachedFiat == _fiat &&
+        _backendWalletSummaryAt != null &&
+        now.difference(_backendWalletSummaryAt!) <
+            _backendWalletSummaryCacheTtl) {
+      return cached;
+    }
+
+    final inFlight = _backendWalletSummaryInFlight;
+    if (inFlight != null) return inFlight;
+
+    final uri = Uri.parse(
+      '$centralizedBaseUrl/market-data/wallet-summary',
+    ).replace(queryParameters: <String, String>{'fiat': _fiat.toUpperCase()});
+
+    final future = _json(uri)
+        .then((payload) {
+          _backendWalletSummaryCache = payload;
+          _backendWalletSummaryAt = DateTime.now().toUtc();
+          return payload;
+        })
+        .whenComplete(() {
+          _backendWalletSummaryInFlight = null;
+        });
+
+    _backendWalletSummaryInFlight = future;
+    return future;
+  }
+
+  List<double> _parseBackendDailyHistory(Map<String, dynamic> payload) {
+    final raw = payload['xlmHistoryDaily'];
+    if (raw is! List) return const <double>[];
+    return raw
+        .whereType<num>()
+        .map((value) => value.toDouble())
+        .where((value) => value.isFinite && !value.isNaN && value > 0)
+        .toList(growable: false);
   }
 
   bool _tryRestoreRatesFromRecentCache() {

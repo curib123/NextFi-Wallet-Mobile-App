@@ -452,7 +452,7 @@ class SettingsVM extends ChangeNotifier {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Theme controls live here only, with semantic surfaces and restrained accent usage for clear contrast.',
+                      'Theme controls live here only, with blue accent variants tuned for clear contrast and consistent branding.',
                       style: textTheme.bodyMedium?.copyWith(
                         color: colors.textSecondary,
                       ),
@@ -487,7 +487,7 @@ class SettingsVM extends ChangeNotifier {
                     ),
                     const SizedBox(height: 22),
                     Text(
-                      'Accent style',
+                      'Blue theme',
                       style: textTheme.labelLarge?.copyWith(
                         color: colors.textPrimary,
                       ),

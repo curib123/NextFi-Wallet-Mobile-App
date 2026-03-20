@@ -1,8 +1,53 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+
+@visibleForTesting
+class BalanceCountAnimationProfile {
+  static Duration tickForMagnitude(double magnitude) {
+    final normalized = magnitude.abs();
+    if (normalized >= 100000) {
+      return const Duration(milliseconds: 24);
+    }
+    if (normalized >= 10000) {
+      return const Duration(milliseconds: 32);
+    }
+    if (normalized >= 1000) {
+      return const Duration(milliseconds: 42);
+    }
+    if (normalized >= 100) {
+      return const Duration(milliseconds: 64);
+    }
+    if (normalized >= 10) {
+      return const Duration(milliseconds: 96);
+    }
+    return const Duration(milliseconds: 130);
+  }
+
+  static double stepFractionForMagnitude(double magnitude) {
+    final normalized = magnitude.abs();
+    if (normalized >= 100000) {
+      return 0.34;
+    }
+    if (normalized >= 10000) {
+      return 0.28;
+    }
+    if (normalized >= 1000) {
+      return 0.22;
+    }
+    if (normalized >= 100) {
+      return 0.16;
+    }
+    if (normalized >= 10) {
+      return 0.11;
+    }
+    return 0.07;
+  }
+}
 
 class LiveCountingBalance extends StatefulWidget {
   const LiveCountingBalance({
@@ -56,7 +101,6 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
   late Animation<double> _glowAnimation;
   late Animation<double> _iconBounceAnimation;
 
-  static const _tick = Duration(milliseconds: 150);
   static const _minStep = 0.01;
 
   @override
@@ -162,41 +206,57 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
 
   void _startTicker() {
     _ticker?.cancel();
-    _ticker = Timer.periodic(_tick, (_) {
-      if (!mounted) return;
+    _scheduleNextTick();
+  }
 
-      if (!widget.animate) {
-        _ticker?.cancel();
-        return;
-      }
+  void _scheduleNextTick() {
+    _ticker?.cancel();
+    if (!widget.animate) return;
+    _ticker = Timer(_nextTickDelay(), _runTickerFrame);
+  }
 
-      if (!widget.targetValue.isFinite) {
-        setState(() => _dir = 0);
-        return;
-      }
+  Duration _nextTickDelay() {
+    final magnitude = math.max(widget.targetValue.abs(), _display.abs());
+    return BalanceCountAnimationProfile.tickForMagnitude(magnitude);
+  }
 
-      final delta = widget.targetValue - _display;
+  void _runTickerFrame() {
+    if (!mounted) return;
 
-      if (delta.abs() <= _minStep) {
-        setState(() {
-          _display = widget.targetValue;
-          _dir = 0;
-        });
-        return;
-      }
+    if (!widget.animate) {
+      _ticker?.cancel();
+      return;
+    }
 
-      final progress = 1 - (delta.abs() / (widget.targetValue.abs() + 1));
-      final easing = Curves.easeOutCubic.transform(progress.clamp(0.0, 1.0));
-      final dynamicStep =
-          (delta.abs() / 3.5).clamp(_minStep, double.infinity) *
-          (1 - easing * 0.7);
-      final step = delta.isNegative ? -dynamicStep : dynamicStep;
+    if (!widget.targetValue.isFinite) {
+      setState(() => _dir = 0);
+      return;
+    }
 
+    final delta = widget.targetValue - _display;
+
+    if (delta.abs() <= _minStep) {
       setState(() {
-        _display = double.parse((_display + step).toStringAsFixed(4));
-        _dir = step > 0 ? 1 : -1;
+        _display = widget.targetValue;
+        _dir = 0;
       });
+      return;
+    }
+
+    final magnitude = math.max(widget.targetValue.abs(), _display.abs());
+    final fraction = BalanceCountAnimationProfile.stepFractionForMagnitude(
+      magnitude,
+    );
+    final dynamicStep = math.max(_minStep, delta.abs() * fraction);
+    final boundedStep = math.min(delta.abs(), dynamicStep);
+    final step = delta.isNegative ? -boundedStep : boundedStep;
+
+    setState(() {
+      _display = double.parse((_display + step).toStringAsFixed(4));
+      _dir = step > 0 ? 1 : -1;
     });
+
+    _scheduleNextTick();
   }
 
   void _restartTicker() {
