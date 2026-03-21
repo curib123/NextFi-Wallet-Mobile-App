@@ -9,6 +9,7 @@ import 'package:next_fi/core/services/network_monitor.dart';
 import 'package:next_fi/features/claimable/presentation/viewmodels/claimable_vm.dart';
 import 'package:next_fi/features/import_wallet/presentation/viewmodels/import_wallet_vm.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_vm.dart';
+import 'package:next_fi/features/portfolio/presentation/viewmodels/portfolio_vm.dart';
 import 'package:next_fi/features/seed_phrases/presentation/viewmodels/seed_phrase_vm.dart';
 import 'package:next_fi/features/settings/presentation/viewmodels/settings_vm.dart';
 import 'package:next_fi/features/swap/presentation/viewmodels/swap_vm.dart';
@@ -229,7 +230,13 @@ final walletHomeVmProvider = ChangeNotifierProvider<WalletHomeVM>((ref) {
   final stellar = ref.read(stellarWalletServiceProvider);
   final seed = ref.read(seedKeypairProvider);
   final assets = ref.read(assetVmProvider);
-  final vm = WalletHomeVM(stellar: stellar, seedVM: seed, assetVM: assets)
+  final currency = ref.read(currencyVmProvider);
+  final vm = WalletHomeVM(
+    stellar: stellar,
+    seedVM: seed,
+    assetVM: assets,
+    currencyVM: currency,
+  )
     ..bindToAddress(seed.accountId);
 
   void syncSeed() => vm.bindToAddress(seed.accountId);
@@ -250,6 +257,15 @@ final transactionsVmProvider = ChangeNotifierProvider<TransactionsVM>((ref) {
   syncWallet();
   ref.onDispose(() => walletHome.removeListener(syncWallet));
   return vm;
+});
+
+final portfolioVmProvider = ChangeNotifierProvider<PortfolioVM>((ref) {
+  final walletHome = ref.read(walletHomeVmProvider);
+  final networkMonitor = ref.read(networkMonitorProvider);
+  return PortfolioVM(
+    walletHomeVM: walletHome,
+    networkMonitor: networkMonitor,
+  );
 });
 
 final priceChartVmProvider = ChangeNotifierProvider<PriceChartVM>((ref) {

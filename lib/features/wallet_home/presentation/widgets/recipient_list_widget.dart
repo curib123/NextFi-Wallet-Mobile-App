@@ -436,7 +436,7 @@ class _RecipientList extends StatelessWidget {
                     await ProviderScope.containerOf(
                       context,
                       listen: false,
-                    ).read(walletHomeVmProvider).refresh(force: true);
+                    ).read(walletHomeVmProvider).onSuccessfulSend();
                   },
                 ),
                 title: 'Select Asset',

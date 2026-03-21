@@ -708,7 +708,7 @@ class ClaimableVM extends ChangeNotifier {
       _receivedItems.removeWhere((i) => i.balanceId == balanceId);
       _safeNotify();
 
-      _walletHomeVM.refresh(force: true);
+      _walletHomeVM.onSuccessfulClaim();
 
       return txHash;
     } catch (e) {
@@ -735,7 +735,7 @@ class ClaimableVM extends ChangeNotifier {
       _sentItems.removeWhere((i) => i.balanceId == balanceId);
       _safeNotify();
 
-      _walletHomeVM.refresh(force: true);
+      _walletHomeVM.onSuccessfulClaim();
 
       return txHash;
     } catch (e) {

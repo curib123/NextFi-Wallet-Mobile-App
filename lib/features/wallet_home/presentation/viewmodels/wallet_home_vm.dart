@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
+import 'package:next_fi/features/portfolio/data/services/portfolio_snapshot_service.dart';
 import 'package:next_fi/features/wallet_home/data/services/wallet_home_flow_service.dart';
 import 'package:next_fi/features/wallet_home/data/models/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
@@ -119,19 +122,29 @@ class WalletHomeVM extends ChangeNotifier {
     required StellarWalletServices stellar,
     required SeedKeypairVM seedVM,
     required AssetVM assetVM,
+    required CurrencyVM currencyVM,
     TokenStorage? tokenStorage,
     WalletHomeFlowService? flowService,
+    PortfolioSnapshotService? snapshotService,
   }) : _stellar = stellar,
        _seedVM = seedVM,
        _assetVM = assetVM,
        _tokenStorage = tokenStorage ?? TokenStorage(),
-       _flowService = flowService ?? WalletHomeFlowService();
+       _flowService = flowService ?? WalletHomeFlowService(),
+       _snapshotService =
+           snapshotService ??
+           PortfolioSnapshotService(
+             currency: currencyVM,
+             assets: assetVM,
+             tokenStorage: tokenStorage,
+           );
 
   final StellarWalletServices _stellar;
   final SeedKeypairVM _seedVM;
   final AssetVM _assetVM;
   final TokenStorage _tokenStorage;
   final WalletHomeFlowService _flowService;
+  final PortfolioSnapshotService _snapshotService;
   static const FlutterSecureStorage _store = FlutterSecureStorage(
     aOptions: AndroidOptions(
       encryptedSharedPreferences: true,
@@ -330,7 +343,9 @@ class WalletHomeVM extends ChangeNotifier {
 
   void bindToSeedVM() => bindToAddress(_seedVM.accountId);
 
-  Future<void> boot() async {
+  Future<void> boot({
+    WalletSnapshotTrigger snapshotTrigger = WalletSnapshotTrigger.appOpen,
+  }) async {
     if (_state.loadingWallet) return;
 
     final shouldShowBalanceLoader = !_state.hasHydratedBalances;
@@ -397,7 +412,7 @@ class WalletHomeVM extends ChangeNotifier {
       if (changed) _restartRealtime();
 
       await _hydrateCachedSnapshot(address);
-      await refresh(force: true);
+      await refresh(force: true, snapshotTrigger: snapshotTrigger);
 
       if (_bootEventsArmed) {
         _emit(BootBalancesReady(xlm: _state.xlm, usdc: _state.usdc));
@@ -418,7 +433,7 @@ class WalletHomeVM extends ChangeNotifier {
       if (!ok) return false;
 
       _bootEventsArmed = true;
-      await boot();
+      await boot(snapshotTrigger: WalletSnapshotTrigger.walletSwitch);
       return true;
     } catch (e) {
       debugPrint('WalletHomeVM.switchTo error: $e');
@@ -427,13 +442,17 @@ class WalletHomeVM extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh({bool force = false}) async {
+  Future<void> refresh({
+    bool force = false,
+    WalletSnapshotTrigger? snapshotTrigger,
+  }) async {
     if (!_state.hasWallet || _state.address == null) return;
     if (_balancesInFlight) return;
     if (!force && !_isStale(_lastFetch, _minBalancesGap)) return;
 
     _balancesInFlight = true;
     final revision = _walletRevision;
+    final previousBalances = _state.balancesByAssetId;
     final shouldShowLoader = !_state.hasHydratedBalances;
     if (shouldShowLoader) {
       _set(_state.copyWith(loadingBalances: true));
@@ -459,6 +478,20 @@ class WalletHomeVM extends ChangeNotifier {
       unawaited(_persistCachedSnapshot());
 
       await _fetchReserves(addr, revision: revision);
+      final balanceChanged = !_sameBalances(previousBalances, balancesByAssetId);
+      if (!_disposed &&
+          revision == _walletRevision &&
+          snapshotTrigger != null &&
+          _state.address == addr) {
+        unawaited(
+          _snapshotService.capture(
+            walletAddress: addr,
+            balancesByAssetId: balancesByAssetId,
+            trigger: snapshotTrigger,
+            balanceChanged: balanceChanged,
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('WalletHomeVM.refresh error: $e');
       if (force) {
@@ -571,7 +604,10 @@ class WalletHomeVM extends ChangeNotifier {
             _set(_state.copyWith(hints: next));
             _emit(IncomingHintAddedEvent(hint));
 
-            _scheduleBalanceKick(_debounceDelay);
+            _scheduleBalanceKick(
+              _debounceDelay,
+              trigger: WalletSnapshotTrigger.receiveDetected,
+            );
           },
           onError: (e) {
             debugPrint('Payment stream error: $e');
@@ -739,10 +775,18 @@ class WalletHomeVM extends ChangeNotifier {
     return DateTime.now().difference(last) >= gap;
   }
 
-  void _scheduleBalanceKick(Duration delay) {
+  void _scheduleBalanceKick(
+    Duration delay, {
+    WalletSnapshotTrigger? trigger,
+  }) {
     _debounceBalanceKick?.cancel();
     _debounceBalanceKick = Timer(delay, () {
-      if (!_disposed) _kickRefreshInBackground(force: true);
+      if (!_disposed) {
+        _kickRefreshInBackground(
+          force: true,
+          trigger: trigger,
+        );
+      }
     });
   }
 
@@ -821,10 +865,32 @@ class WalletHomeVM extends ChangeNotifier {
       )
       .toList(growable: false);
 
-  void _kickRefreshInBackground({bool force = false}) {
-    refresh(force: force).catchError((e) {
+  void _kickRefreshInBackground({
+    bool force = false,
+    WalletSnapshotTrigger? trigger,
+  }) {
+    refresh(force: force, snapshotTrigger: trigger).catchError((e) {
       debugPrint('Background refresh error: $e');
     });
+  }
+
+  Future<void> manualRefresh() {
+    return refresh(
+      force: true,
+      snapshotTrigger: WalletSnapshotTrigger.manualRefresh,
+    );
+  }
+
+  Future<void> onSuccessfulSend() {
+    return refresh(force: true, snapshotTrigger: WalletSnapshotTrigger.send);
+  }
+
+  Future<void> onSuccessfulSwap() {
+    return refresh(force: true, snapshotTrigger: WalletSnapshotTrigger.swap);
+  }
+
+  Future<void> onSuccessfulClaim() {
+    return refresh(force: true, snapshotTrigger: WalletSnapshotTrigger.claim);
   }
 
   Future<void> _hydrateCachedSnapshot(String address) async {
@@ -920,5 +986,16 @@ class WalletHomeVM extends ChangeNotifier {
     }
 
     return const <String, double>{};
+  }
+
+  bool _sameBalances(Map<String, double> a, Map<String, double> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      final other = b[entry.key];
+      if (other == null) return false;
+      if ((entry.value - other).abs() > 0.0000001) return false;
+    }
+    return true;
   }
 }

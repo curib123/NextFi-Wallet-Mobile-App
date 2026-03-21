@@ -84,6 +84,19 @@ class ImportWalletVM extends ChangeNotifier {
 
       final wallet = await Wallet.from(phrase);
       final publicAddress = await wallet.getAccountId(index: 0);
+      final existingWallets = await SeedStorage.listWallets();
+      final alreadyAdded = existingWallets.any(
+        (item) => item.publicAddress?.trim() == publicAddress.trim(),
+      );
+      if (alreadyAdded) {
+        _set(
+          _state.copyWith(
+            importing: false,
+            error: 'This wallet is already added',
+          ),
+        );
+        return false;
+      }
 
       final newId = await SeedStorage.addWallet(
         phrase,

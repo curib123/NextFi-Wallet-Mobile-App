@@ -14,7 +14,7 @@ class WalletManager {
     String? q,
     String? network,
   }) async {
-    final wallets = <WalletAddress>[];
+    final wallets = <String, WalletAddress>{};
     var page = 1;
 
     while (true) {
@@ -22,7 +22,10 @@ class WalletManager {
         query: WalletListQuery(q: q, network: network, page: page, limit: 100),
       );
 
-      wallets.addAll(response.items);
+      for (final wallet in response.items) {
+        final key = wallet.publicAddress.trim().toLowerCase();
+        wallets.putIfAbsent(key, () => wallet);
+      }
 
       final totalPages = response.meta.totalPages < 1
           ? 1
@@ -33,7 +36,7 @@ class WalletManager {
       page += 1;
     }
 
-    return wallets;
+    return wallets.values.toList(growable: false);
   }
 
   Future<WalletCreationResult> createWallet({
@@ -130,7 +133,7 @@ class WalletManager {
 
     final activeId = await SeedStorage.getActiveWalletId();
 
-    return localWallets.map((local) {
+    final items = localWallets.map((local) {
       final backend = backendWallets?.firstWhereOrNull(
         (b) => b.publicAddress == local.publicAddress,
       );
@@ -146,6 +149,13 @@ class WalletManager {
         syncedToBackend: backend != null,
       );
     }).toList();
+
+    final seen = <String>{};
+    return items.where((wallet) {
+      final key = (wallet.publicAddress ?? '').trim().toLowerCase();
+      if (key.isEmpty) return seen.add(wallet.localId);
+      return seen.add(key);
+    }).toList(growable: false);
   }
 
   Future<bool> renameWallet({

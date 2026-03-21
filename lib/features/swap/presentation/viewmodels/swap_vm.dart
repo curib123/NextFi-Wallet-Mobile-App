@@ -569,7 +569,7 @@ class SwapVM extends ChangeNotifier {
       minOut: minOut,
     );
 
-    await _walletHomeVM.refresh(force: true);
+    await _walletHomeVM.onSuccessfulSwap();
     return txid;
   }
 
