@@ -1061,7 +1061,6 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       decoration: BoxDecoration(
         color: isDark ? c.background : c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border, width: 1.5),
       ),
       child: TextField(
         controller: _recipientCtl,

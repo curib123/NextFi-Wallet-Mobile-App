@@ -8,6 +8,7 @@ import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
 
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
@@ -73,6 +74,10 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
 
     try {
       final txHash = await ref.read(claimableVmProvider).claim(balanceId);
+      await ref.read(portfolioVmProvider).refreshForWallet(
+        walletState: ref.read(walletHomeVmProvider).state,
+        trigger: WalletSnapshotTrigger.claim,
+      );
       if (!mounted) return;
 
       HapticFeedback.mediumImpact();

@@ -147,7 +147,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
+            padding: const EdgeInsets.fromLTRB(11, 11, 11, 11),
             decoration: BoxDecoration(
               color: _isPressed
                   ? widget.colors.background

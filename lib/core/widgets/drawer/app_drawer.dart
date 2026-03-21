@@ -13,6 +13,7 @@ import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
 import 'package:next_fi/features/merchant_flow/presentation/screens/merchant_onboarding_flow_screen.dart';
 import 'package:next_fi/features/merchant_trades/presentation/screens/merchant_trades_screen.dart';
 import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
+import 'package:next_fi/features/portfolio/presentation/screens/portfolio_screen.dart';
 import 'package:next_fi/features/trades/presentation/screens/trade_history_screen.dart';
 import 'package:next_fi/features/trades/presentation/viewmodels/trade_inbox_summary_provider.dart';
 import 'package:next_fi/features/offers/presentation/screens/manage_offers_screen.dart';
@@ -401,6 +402,10 @@ class _AppDrawerState extends State<AppDrawer>
     _push(const TradeHistoryScreen());
   }
 
+  void _handlePortfolioTap() {
+    _push(const PortfolioScreen());
+  }
+
   Future<void> _openLegal(String url, String label) async {
     await LinkOpener.open(context, url, fallbackLabel: label);
     if (mounted) Navigator.pop(context);
@@ -484,6 +489,17 @@ class _AppDrawerState extends State<AppDrawer>
                     _staggered(
                       2,
                       _Tile(
+                        icon: LucideIcons.pieChart,
+                        label: 'Portfolio',
+                        sub: 'Wallet performance & history',
+                        accent: c.accent,
+                        c: c,
+                        onTap: _handlePortfolioTap,
+                      ),
+                    ),
+                    _staggered(
+                      3,
+                      _Tile(
                         icon: LucideIcons.clipboardList,
                         label: 'My Trades',
                         sub: 'Trade history',
@@ -494,9 +510,9 @@ class _AppDrawerState extends State<AppDrawer>
                       ),
                     ),
 
-                    _staggered(3, _Section(label: 'ACCOUNT', c: c)),
+                    _staggered(4, _Section(label: 'ACCOUNT', c: c)),
                     _staggered(
-                      4,
+                      5,
                       _Tile(
                         icon: LucideIcons.shieldCheck,
                         label: 'Verification',
@@ -511,7 +527,7 @@ class _AppDrawerState extends State<AppDrawer>
                       ),
                     ),
                     _staggered(
-                      5,
+                      6,
                       _Tile(
                         icon: LucideIcons.landmark,
                         label: 'Payment Account',
@@ -524,9 +540,9 @@ class _AppDrawerState extends State<AppDrawer>
                     ),
 
                     if (canRequestMerchant) ...[
-                      _staggered(6, _Section(label: 'MERCHANT', c: c)),
+                      _staggered(7, _Section(label: 'MERCHANT', c: c)),
                       _staggered(
-                        7,
+                        8,
                         _Tile(
                           icon: LucideIcons.briefcase,
                           label: 'Merchant Request',
@@ -543,9 +559,9 @@ class _AppDrawerState extends State<AppDrawer>
 
                     if (isMerchant) ...[
                       if (!canRequestMerchant)
-                        _staggered(8, _Section(label: 'MERCHANT', c: c)),
+                        _staggered(9, _Section(label: 'MERCHANT', c: c)),
                       _staggered(
-                        9,
+                        10,
                         _Tile(
                           icon: LucideIcons.tag,
                           label: 'Manage Offers',
@@ -556,7 +572,7 @@ class _AppDrawerState extends State<AppDrawer>
                         ),
                       ),
                       _staggered(
-                        11,
+                        12,
                         Consumer(
                           builder: (context, ref, _) {
                             final tradeSummary = ref.watch(
@@ -589,9 +605,9 @@ class _AppDrawerState extends State<AppDrawer>
                       ),
                     ],
 
-                    _staggered(12, _Section(label: 'SETTINGS', c: c)),
+                    _staggered(13, _Section(label: 'SETTINGS', c: c)),
                     _staggered(
-                      13,
+                      14,
                       _Tile(
                         icon: LucideIcons.keyRound,
                         label: 'Manage Wallet',
@@ -602,7 +618,7 @@ class _AppDrawerState extends State<AppDrawer>
                       ),
                     ),
                     _staggered(
-                      14,
+                      15,
                       _Tile(
                         icon: LucideIcons.slidersHorizontal,
                         label: 'Preferences',
@@ -613,7 +629,7 @@ class _AppDrawerState extends State<AppDrawer>
                       ),
                     ),
                     _staggered(
-                      15,
+                      16,
                       _Tile(
                         icon: LucideIcons.fileText,
                         label: 'Terms & Conditions',
@@ -624,7 +640,7 @@ class _AppDrawerState extends State<AppDrawer>
                       ),
                     ),
                     _staggered(
-                      16,
+                      17,
                       _Tile(
                         icon: LucideIcons.shield,
                         label: 'Privacy Policy',
@@ -637,7 +653,7 @@ class _AppDrawerState extends State<AppDrawer>
 
                     const SizedBox(height: 20),
                     if (_appInfo != null)
-                      _staggered(17, _VersionRow(info: _appInfo!, c: c)),
+                      _staggered(18, _VersionRow(info: _appInfo!, c: c)),
                     const SizedBox(height: 8),
                   ],
                 ),

@@ -734,7 +734,6 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       decoration: BoxDecoration(
         color: t.inputBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: t.chipBorder, width: 1.5),
       ),
       child: TextField(
         controller: _toCtl,

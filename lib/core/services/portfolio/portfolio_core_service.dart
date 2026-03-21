@@ -1,21 +1,54 @@
-import 'api/portfolio_service.dart';
+import 'package:next_fi/core/services/portfolio/api/portfolio_service.dart';
+import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
+import 'package:next_fi/core/services/wallet/helpers/wallet_exceptions.dart';
 
 class PortfolioCoreService {
   PortfolioCoreService._();
 
   static final PortfolioCoreService I = PortfolioCoreService._();
 
-  final TokenStorage _tokens = TokenStorage();
-  PortfolioService? _service;
+  late final PortfolioService _api = PortfolioService(
+    tokenProvider: _safeTokenProvider,
+  );
 
-  PortfolioService get _api =>
-      _service ??= PortfolioService(tokenProvider: () => _tokens.accessToken);
+  static Future<String?> _safeTokenProvider() async {
+    try {
+      final storage = TokenStorage();
+      return await storage.accessToken;
+    } catch (_) {
+      return null;
+    }
+  }
 
-  PortfolioService get api => _api;
+  Future<void> createSnapshot(CreatePortfolioSnapshotRequest request) async {
+    try {
+      await _api.createSnapshot(request);
+    } on ApiException catch (error) {
+      _handleAuthError(error);
+      rethrow;
+    }
+  }
+
+  Future<WalletPortfolioData> getWalletPortfolio({
+    required String walletId,
+    required PortfolioRange range,
+  }) async {
+    try {
+      return await _api.getWalletPortfolio(walletId: walletId, range: range);
+    } on ApiException catch (error) {
+      _handleAuthError(error);
+      rethrow;
+    }
+  }
+
+  void _handleAuthError(ApiException error) {
+    if (error.statusCode == 401) {
+      // Ignored here; shell/auth flow handles reauthentication.
+    }
+  }
 
   void dispose() {
-    _service?.dispose();
-    _service = null;
+    _api.dispose();
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/app/viewmodels/asset_vm.dart';
+import 'package:next_fi/core/services/stellar/stellar_account_service.dart';
 import 'package:next_fi/features/swap/data/models/swap_dir.dart';
 import 'package:next_fi/features/swap/presentation/viewmodels/swap_state.dart';
 import 'package:next_fi/features/swap/data/models/swap_mode.dart';
@@ -58,6 +59,11 @@ class SwapVM extends ChangeNotifier {
   String _toAssetId = 'usdc_stellar';
   double _fromBalance = 0.0;
   double _toBalance = 0.0;
+  String? _lastSuccessfulSwapTxId;
+  bool _autoAddDestinationTrustline = true;
+  bool _removeSourceTrustlineAfterSwap = false;
+  TrustlineRemovalCheck? _sourceTrustlineRemovalCheck;
+  String? _lastTrustlineActionMessage;
 
   double get amount => _amount;
   double get slippagePct => _slippagePct;
@@ -69,6 +75,12 @@ class SwapVM extends ChangeNotifier {
   String get toSymbol => toAsset.symbol.toUpperCase();
   double get fromBalance => _fromBalance;
   double get toBalance => _toBalance;
+  String? get lastSuccessfulSwapTxId => _lastSuccessfulSwapTxId;
+  bool get autoAddDestinationTrustline => _autoAddDestinationTrustline;
+  bool get removeSourceTrustlineAfterSwap => _removeSourceTrustlineAfterSwap;
+  TrustlineRemovalCheck? get sourceTrustlineRemovalCheck =>
+      _sourceTrustlineRemovalCheck;
+  String? get lastTrustlineActionMessage => _lastTrustlineActionMessage;
   List<AssetModel> get swappableAssets => _assetVM.assets
       .where(
         (a) =>
@@ -164,6 +176,69 @@ class SwapVM extends ChangeNotifier {
 
   bool get _isSendingNative => fromAsset.isNative || fromSymbol == 'XLM';
   bool get _isReceivingNative => toAsset.isNative || toSymbol == 'XLM';
+  bool get destinationHasTrustline =>
+      _isReceivingNative || !_state.needsTrustline;
+  bool get showDestinationTrustlineSection => !_isReceivingNative;
+  bool get showSourceTrustlineRemovalSection =>
+      !_isSendingNative && (_sourceTrustlineRemovalCheck?.hasTrustline ?? false);
+  bool get willAutoAddDestinationTrustline =>
+      !_isReceivingNative &&
+      _state.needsTrustline &&
+      _autoAddDestinationTrustline;
+
+  String get destinationTrustlineHint {
+    if (_isReceivingNative) {
+      return 'XLM is native on Stellar and does not need a trustline.';
+    }
+    if (destinationHasTrustline) {
+      return '$toSymbol trustline is already active on this wallet.';
+    }
+    if (_autoAddDestinationTrustline) {
+      return 'This swap will auto-add the $toSymbol trustline and reserve about ${_floorTo(trustlineReserveXlm, 2).toStringAsFixed(2)} XLM.';
+    }
+    return 'Turn on auto-add trustline to receive $toSymbol on this wallet.';
+  }
+
+  String? get sourceTrustlineRemovalHint {
+    if (!showSourceTrustlineRemovalSection) return null;
+    final check = _sourceTrustlineRemovalCheck;
+    if (check == null) {
+      return 'Checking whether this trustline can be removed safely after the swap.';
+    }
+    if (!_removeSourceTrustlineAfterSwap) {
+      return 'Optional: remove the empty $fromSymbol trustline after swapping out the full balance.';
+    }
+    if (check.sellingLiabilities > _eps) {
+      return check.blockingReason ??
+          'This trustline still has open liabilities and cannot be removed yet.';
+    }
+    if (_amount <= 0) {
+      return 'Enter a $fromSymbol amount before removing the trustline after swap.';
+    }
+    if (_amount + _eps < check.availableBalance) {
+      return 'Swap the full available $fromSymbol balance to remove this trustline after the swap.';
+    }
+    return 'After the swap clears the $fromSymbol balance, the wallet will remove the empty trustline automatically.';
+  }
+
+  String? get trustlineValidationMessage {
+    if (showDestinationTrustlineSection &&
+        _state.needsTrustline &&
+        !_autoAddDestinationTrustline) {
+      return 'Enable auto-add trustline to receive $toSymbol on this wallet.';
+    }
+    if (_removeSourceTrustlineAfterSwap) {
+      final hint = sourceTrustlineRemovalHint;
+      if (hint != null &&
+          (hint.startsWith('Checking whether') ||
+              hint.startsWith('Enter a ') ||
+              hint.startsWith('Swap the full') ||
+              hint.startsWith('This trustline still'))) {
+        return hint;
+      }
+    }
+    return null;
+  }
 
   void _onWalletHomeChanged() {
     if ((_state.accountId ?? '').isEmpty) return;
@@ -182,7 +257,8 @@ class SwapVM extends ChangeNotifier {
   double get availableFrom {
     if (_isSendingNative) {
       final kept = _requiredXlmNonAmountBudget(
-        includeTrustlineReserve: _state.needsTrustline,
+        includeTrustlineReserve:
+            _state.needsTrustline && _autoAddDestinationTrustline,
       );
       return _floor6((_state.xlmBal - kept).clamp(0.0, double.infinity));
     }
@@ -193,7 +269,8 @@ class SwapVM extends ChangeNotifier {
   bool get _hasEnoughXlmForFees =>
       _state.xlmBal >=
       _requiredXlmNonAmountBudget(
-            includeTrustlineReserve: _state.needsTrustline,
+            includeTrustlineReserve:
+                _state.needsTrustline && _autoAddDestinationTrustline,
           ) -
           _eps;
 
@@ -247,6 +324,18 @@ class SwapVM extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setAutoAddDestinationTrustline(bool value) {
+    if (_autoAddDestinationTrustline == value) return;
+    _autoAddDestinationTrustline = value;
+    notifyListeners();
+  }
+
+  void setRemoveSourceTrustlineAfterSwap(bool value) {
+    if (_removeSourceTrustlineAfterSwap == value) return;
+    _removeSourceTrustlineAfterSwap = value;
+    notifyListeners();
+  }
+
   Future<void> capAmountToAvailableAndRequote() async {
     final cap = availableFrom;
     if (_amount > cap && cap > 0) {
@@ -267,6 +356,7 @@ class SwapVM extends ChangeNotifier {
       _amount > 0 &&
       hasEnough(_amount) &&
       _hasEnoughXlmForFees &&
+      trustlineValidationMessage == null &&
       !_state.loading;
 
   double? get currentMinOut {
@@ -284,7 +374,7 @@ class SwapVM extends ChangeNotifier {
     final fee = estCombinedFeeXlm;
     final feeStr = fee <= 0
         ? ''
-        : ' | Fee ~ ${fmt(fee)} XLM${_state.needsTrustline ? ' (incl. trustline)' : ''}';
+        : ' | Fee ~ ${fmt(fee)} XLM${_state.needsTrustline && _autoAddDestinationTrustline ? ' (incl. trustline)' : ''}';
     return 'Est. receive: $recv $toSymbol | Slippage: $slStr%$feeStr';
   }
 
@@ -397,6 +487,10 @@ class SwapVM extends ChangeNotifier {
     if (from.id == to.id) return;
     _fromAssetId = from.id;
     _toAssetId = to.id;
+    _autoAddDestinationTrustline = true;
+    _removeSourceTrustlineAfterSwap = false;
+    _sourceTrustlineRemovalCheck = null;
+    _lastTrustlineActionMessage = null;
     _quoteSeq++;
     _set(_state.copyWith(estReceive: null));
     await refreshBalances();
@@ -450,6 +544,17 @@ class SwapVM extends ChangeNotifier {
       } catch (_) {}
     }
 
+    TrustlineRemovalCheck? sourceRemovalCheck;
+    if (!_isSendingNative) {
+      try {
+        sourceRemovalCheck = await _svc.getTrustlineRemovalCheck(
+          accountId: aid,
+          asset: _toStellarAsset(fromAsset),
+        );
+      } catch (_) {}
+    }
+    _sourceTrustlineRemovalCheck = sourceRemovalCheck;
+
     _set(
       _state.copyWith(
         xlmBal: xlmBal ?? _state.xlmBal,
@@ -457,6 +562,7 @@ class SwapVM extends ChangeNotifier {
         needsTrustline: needsTrustline,
       ),
     );
+    notifyListeners();
   }
 
   Future<String> executeSwap({
@@ -494,6 +600,7 @@ class SwapVM extends ChangeNotifier {
     }
 
     await _svc.ensureSwapFeeConfigLoaded(refresh: true);
+    _lastTrustlineActionMessage = null;
 
     final kp = await _keys.deriveKeyPair();
     final liveBreakdown = await _svc
@@ -512,6 +619,27 @@ class SwapVM extends ChangeNotifier {
     final requiredXlm = _requiredXlmNonAmountBudget(
       includeTrustlineReserve: liveNeedsTrustline,
     );
+
+    if (!_isReceivingNative &&
+        liveNeedsTrustline &&
+        !_autoAddDestinationTrustline) {
+      throw StellarWalletError(
+        'A $toSymbol trustline is required before you can receive this asset',
+        advice:
+            'Enable auto-add trustline or switch the asset you want to receive.',
+        code: 'SWAP_TRUSTLINE_REQUIRED',
+      );
+    }
+
+    final trustlineValidation = trustlineValidationMessage;
+    if (trustlineValidation != null &&
+        !trustlineValidation.startsWith('Enable auto-add')) {
+      throw StellarWalletError(
+        'Trustline action needs attention',
+        advice: trustlineValidation,
+        code: 'SWAP_TRUSTLINE_ACTION_BLOCKED',
+      );
+    }
 
     if (_isSendingNative) {
       final totalRequiredXlm = amount + requiredXlm;
@@ -569,7 +697,16 @@ class SwapVM extends ChangeNotifier {
       minOut: minOut,
     );
 
-    await _walletHomeVM.onSuccessfulSwap();
+    _lastSuccessfulSwapTxId = txid;
+    await _walletHomeVM.refresh(force: true);
+    if (_removeSourceTrustlineAfterSwap && !_isSendingNative) {
+      _lastTrustlineActionMessage = await _removeSourceTrustlineIfPossible(
+        keyPair: kp,
+        asset: fromAsset,
+      );
+      _removeSourceTrustlineAfterSwap = false;
+      notifyListeners();
+    }
     return txid;
   }
 
@@ -633,6 +770,31 @@ class SwapVM extends ChangeNotifier {
     const double safetyBuffer = 0.0002;
     final reserve = includeTrustlineReserve ? trustlineReserveXlm : 0.0;
     return estCombinedFeeXlm + reserve + safetyBuffer;
+  }
+
+  Future<String?> _removeSourceTrustlineIfPossible({
+    required KeyPair keyPair,
+    required AssetModel asset,
+  }) async {
+    try {
+      final stellarAsset = _toStellarAsset(asset);
+      final check = await _svc.getTrustlineRemovalCheck(
+        accountId: keyPair.accountId,
+        asset: stellarAsset,
+      );
+      if (!check.hasTrustline) {
+        return '$fromSymbol trustline is already inactive.';
+      }
+      if (!check.canRemove) {
+        return check.blockingReason ??
+            'Swap completed, but the $fromSymbol trustline could not be removed.';
+      }
+      await _svc.removeTrustline(keyPair: keyPair, asset: stellarAsset);
+      await _walletHomeVM.refresh(force: true);
+      return '$fromSymbol trustline removed and reserve released.';
+    } catch (_) {
+      return 'Swap completed, but the $fromSymbol trustline could not be removed.';
+    }
   }
 
   void _scheduleQuote(double amount) {

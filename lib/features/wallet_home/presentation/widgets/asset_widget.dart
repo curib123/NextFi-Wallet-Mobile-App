@@ -27,6 +27,7 @@ class AssetWidget extends ConsumerWidget {
     this.loading = false,
     this.onRefresh,
     this.onItemTap,
+    this.embeddedInScrollView = false,
   });
 
   final AppColor colors;
@@ -38,6 +39,7 @@ class AssetWidget extends ConsumerWidget {
   final Future<void> Function()? onRefresh;
   final Object? hasUsdcTrustline;
   final void Function(String token)? onItemTap;
+  final bool embeddedInScrollView;
 
   double _liveBalance(WalletHomeState? state, AssetModel asset) {
     if (state != null) {
@@ -187,7 +189,10 @@ class AssetWidget extends ConsumerWidget {
         direction: ShimmerDirection.ltr,
         period: const Duration(milliseconds: 1500),
         child: ListView.separated(
-          physics: const AlwaysScrollableScrollPhysics(),
+          physics: embeddedInScrollView
+              ? const NeverScrollableScrollPhysics()
+              : const AlwaysScrollableScrollPhysics(),
+          shrinkWrap: embeddedInScrollView,
           itemCount: 5,
           separatorBuilder: (_, __) => const SizedBox(height: 16),
           itemBuilder: (ctx, __) => _shimmerTile(ctx),
@@ -196,7 +201,10 @@ class AssetWidget extends ConsumerWidget {
     }
 
     final listView = ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
+      physics: embeddedInScrollView
+          ? const NeverScrollableScrollPhysics()
+          : const AlwaysScrollableScrollPhysics(),
+      shrinkWrap: embeddedInScrollView,
       padding: const EdgeInsets.only(top: 8, bottom: 120),
       itemCount: sortedAssets.length,
       itemBuilder: (context, index) {

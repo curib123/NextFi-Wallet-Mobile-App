@@ -162,6 +162,7 @@ class StellarSwapService extends StellarBaseService {
         code: 'UNSUPPORTED_TRADING_PAIR',
       );
     }
+    validateMemoText(memoText);
 
     try {
       await feeService.ensureFeeConfigLoaded();

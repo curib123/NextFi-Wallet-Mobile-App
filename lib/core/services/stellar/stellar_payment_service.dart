@@ -42,6 +42,7 @@ class StellarPaymentService extends StellarBaseService {
     }
 
     final assetName = _assetLabel(asset);
+    validateMemoText(memoText);
 
     try {
       onProgress?.call('Validating address...');

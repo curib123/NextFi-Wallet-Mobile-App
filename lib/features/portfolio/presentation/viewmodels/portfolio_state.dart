@@ -8,8 +8,10 @@ class PortfolioState {
     this.selectedRange = PortfolioRange.h24,
     this.data,
     this.loading = false,
+    this.refreshing = false,
+    this.capturingSnapshot = false,
     this.error,
-    this.isOffline = false,
+    this.lastLoadedWalletId,
   });
 
   final String? activeWalletId;
@@ -18,38 +20,51 @@ class PortfolioState {
   final PortfolioRange selectedRange;
   final WalletPortfolioData? data;
   final bool loading;
+  final bool refreshing;
+  final bool capturingSnapshot;
   final String? error;
-  final bool isOffline;
+  final String? lastLoadedWalletId;
 
   bool get hasWallet =>
-      (activeWalletId != null && activeWalletId!.trim().isNotEmpty) ||
-      (activeWalletAddress != null && activeWalletAddress!.trim().isNotEmpty);
+      (activeWalletId ?? '').trim().isNotEmpty &&
+      (activeWalletAddress ?? '').trim().isNotEmpty;
+
   bool get hasData => data != null;
-  bool get isEmpty => !loading && error == null && data?.summary == null;
-  bool get hasInsufficientData => (data?.chart.length ?? 0) < 2;
-  bool get isZeroBalance => (data?.summary?.totalValue ?? 0) <= 0;
+  bool get isEmpty => !loading && data?.summary == null && !(isZeroBalance);
+  bool get isZeroBalance =>
+      !loading &&
+      (data?.summary?.totalValue ?? 0) <= 0 &&
+      (data?.allocation.isEmpty ?? true);
+  bool get hasInsufficientData => !loading && (data?.chart.length ?? 0) == 1;
+  bool get isOffline => error?.toLowerCase().contains('socket') == true;
 
   PortfolioState copyWith({
     String? activeWalletId,
     String? activeWalletAddress,
     String? walletLabel,
     PortfolioRange? selectedRange,
-    Object? data = _sentinel,
+    WalletPortfolioData? data,
     bool? loading,
-    Object? error = _sentinel,
-    bool? isOffline,
+    bool? refreshing,
+    bool? capturingSnapshot,
+    String? error,
+    bool clearError = false,
+    bool clearData = false,
+    String? lastLoadedWalletId,
   }) {
     return PortfolioState(
       activeWalletId: activeWalletId ?? this.activeWalletId,
       activeWalletAddress: activeWalletAddress ?? this.activeWalletAddress,
       walletLabel: walletLabel ?? this.walletLabel,
       selectedRange: selectedRange ?? this.selectedRange,
-      data: identical(data, _sentinel) ? this.data : data as WalletPortfolioData?,
+      data: clearData ? null : (data ?? this.data),
       loading: loading ?? this.loading,
-      error: identical(error, _sentinel) ? this.error : error as String?,
-      isOffline: isOffline ?? this.isOffline,
+      refreshing: refreshing ?? this.refreshing,
+      capturingSnapshot: capturingSnapshot ?? this.capturingSnapshot,
+      error: clearError ? null : (error ?? this.error),
+      lastLoadedWalletId: lastLoadedWalletId ?? this.lastLoadedWalletId,
     );
   }
 
-  static const Object _sentinel = Object();
+  factory PortfolioState.initial() => const PortfolioState();
 }

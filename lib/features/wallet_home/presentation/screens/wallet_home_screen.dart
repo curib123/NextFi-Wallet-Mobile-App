@@ -1,34 +1,40 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
-import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
-import 'package:next_fi/features/trades/presentation/screens/trade_history_screen.dart';
-import 'package:next_fi/features/verification_flow/presentation/screens/verification_flow_screen.dart';
-
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
+import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
+import 'package:next_fi/core/widgets/alert/app_alert.dart';
+import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
+import 'package:next_fi/core/widgets/modal/token_chooser.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
+import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
+import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
+import 'package:next_fi/features/portfolio/presentation/screens/portfolio_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
-import 'package:next_fi/features/portfolio/presentation/screens/portfolio_screen.dart';
+import 'package:next_fi/features/trades/presentation/screens/trade_history_screen.dart';
+import 'package:next_fi/features/trades/presentation/viewmodels/trade_inbox_summary_provider.dart';
+import 'package:next_fi/features/verification_flow/presentation/screens/verification_flow_screen.dart';
+import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
+import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
+import 'package:next_fi/features/wallet_home/presentation/widgets/asset_widget.dart';
+import 'package:next_fi/features/wallet_home/presentation/widgets/header_section.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/incoming_hints_strip.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/top_bar.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/wallet_header_guide.dart';
-import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
-import 'package:next_fi/app/viewmodels/currency_vm.dart';
-import 'package:next_fi/features/trades/presentation/viewmodels/trade_inbox_summary_provider.dart';
-
-import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
-import 'package:next_fi/core/widgets/alert/app_alert.dart';
-import 'package:next_fi/core/widgets/modal/token_chooser.dart';
-import 'package:next_fi/app/theme/app_color.dart';
-import 'package:next_fi/app/theme/app_fonts.dart';
 
 class WalletHomeScreen extends ConsumerStatefulWidget {
   const WalletHomeScreen({super.key});
+
   @override
   ConsumerState<WalletHomeScreen> createState() => _WalletHomeScreenState();
 }
@@ -48,6 +54,10 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
   VoidCallback? _walletVmListener;
   String? _lastTxBoundAddress;
+  String? _lastPortfolioBoundAddress;
+  WalletSnapshotTrigger _pendingPortfolioTrigger =
+      WalletSnapshotTrigger.appOpen;
+  bool _animateTotal = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -61,6 +71,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
       if (!mounted) return;
       final vm = ref.read(walletHomeVmProvider);
       final txVm = ref.read(transactionsVmProvider);
+      final portfolioVm = ref.read(portfolioVmProvider);
 
       _uiSub = vm.uiEvents.listen(_onUiEvent);
       vm.attachConfirmedTxStream(txVm.incomingStream);
@@ -69,6 +80,20 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
         if (addr != _lastTxBoundAddress) {
           _lastTxBoundAddress = addr;
           txVm.bindToAddress(addr);
+        }
+        if (addr != _lastPortfolioBoundAddress) {
+          final previous = _lastPortfolioBoundAddress;
+          _lastPortfolioBoundAddress = addr;
+          _pendingPortfolioTrigger = previous == null
+              ? WalletSnapshotTrigger.appOpen
+              : WalletSnapshotTrigger.walletSwitch;
+          unawaited(
+            portfolioVm.bindActiveWallet(
+              localWalletId: ref.read(seedKeypairProvider).activeWalletId,
+              address: addr,
+              label: vm.state.walletName,
+            ),
+          );
         }
       };
       vm.addListener(_walletVmListener!);
@@ -85,9 +110,9 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _livePulse.dispose();
-
     _uiSub?.cancel();
     _uiSub = null;
+
     final vm = ref.read(walletHomeVmProvider);
     if (_walletVmListener != null) {
       vm.removeListener(_walletVmListener!);
@@ -120,27 +145,44 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     final colors = AppColor.of(context);
     final vm = ref.watch(walletHomeVmProvider);
     final s = vm.state;
-
     final currency = ref.watch(currencyVmProvider);
-    final assetsVM = ref.watch(assetVmProvider);
+    final assetsVm = ref.watch(assetVmProvider);
     final tradeInboxSummary = ref.watch(tradeInboxSummaryProvider);
     final appShell = ref.watch(appShellProvider);
-    final allAssetList = assetsVM.assets;
 
+    final allAssetList = assetsVm.assets;
+    final walletHomeAssetList = assetsVm.walletHomeAssets;
+    final showAssetTileSkeleton =
+        !assetsVm.hasCatalogData &&
+        walletHomeAssetList.isEmpty &&
+        !s.hasHydratedBalances &&
+        (allAssetList.isEmpty || s.loadingBalances);
+    final showHeaderLoader = s.loadingBalances && !s.hasHydratedBalances;
+    final currencyFmt = NumberFormat.simpleCurrency(
+      name: currency.fiat.toUpperCase(),
+    );
     final totalFiat = _portfolioFiatTotal(
       currency: currency,
       assets: allAssetList,
       balancesByAssetId: s.balancesByAssetId,
     );
+    final chartSeries = _xlmPriceWindowSeries(currency, s.selectedWindow);
+    final chartDeltaFiat = _seriesDelta(chartSeries);
     final activeTradeCount = appShell.isAuthenticated
         ? tradeInboxSummary.maybeWhen(
             data: (summary) => summary.activeTradeCount,
             orElse: () => 0,
           )
         : 0;
+    final logosById = <String, String>{
+      for (final a in allAssetList)
+        a.id: (a.primaryLogo.isNotEmpty
+            ? a.primaryLogo
+            : assetsVm.logoFor(a.symbol)),
+    };
+
     return Scaffold(
       backgroundColor: colors.surface,
-
       drawer: const AppDrawer(),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
@@ -162,19 +204,18 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
           const SizedBox(height: 10),
           FloatingActionButton(
             heroTag: 'wallet-home-recipient-fab',
-            onPressed: () => _openRecipientList(),
+            onPressed: _openRecipientList,
             backgroundColor: colors.primary,
-            foregroundColor: AppColor.of(context).onPrimary,
+            foregroundColor: colors.onPrimary,
             elevation: 8,
             shape: const CircleBorder(),
-            child: Icon(LucideIcons.users, size: 20),
+            child: const Icon(LucideIcons.users, size: 20),
           ),
         ],
       ),
-
       body: SafeArea(
         child: RefreshIndicator.adaptive(
-          onRefresh: () => ref.read(walletHomeVmProvider).manualRefresh(),
+          onRefresh: _handleRefresh,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -186,43 +227,49 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
-                  child: _PortfolioShortcutCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: HeaderSection(
                     colors: colors,
-                    currency: currency,
-                    liveTotalFiat: totalFiat,
-                    walletLabel: s.walletName,
-                    walletAddress: s.address,
-                    onTap: _openPortfolioScreen,
+                    currencyFmt: currencyFmt,
+                    loadingBalances: showHeaderLoader,
+                    totalFiat: totalFiat,
+                    lastBalancesAt: s.lastBalancesAt,
+                    onPortfolio: _openPortfolio,
+                    onSwap: _openHeaderScanner,
+                    onSend: () => vm.onSendPressed(),
+                    onReceive: () => vm.onReceivePressed(),
+                    onP2P: _openP2PMarketplace,
+                    livePulse: _livePulse,
+                    incomingStrip: s.hasWallet
+                        ? IncomingHintsStrip(
+                            colors: colors,
+                            stellarAddress: s.address ?? '',
+                            incomingHints: s.hints
+                                .map(
+                                  (h) => {
+                                    'hash': h.id,
+                                    'from': h.from,
+                                    'to': h.to,
+                                    'amount': h.amount.toStringAsFixed(6),
+                                    'assetCode': h.assetCode,
+                                  },
+                                )
+                                .toList(),
+                            onAcknowledge: (tx) => ref
+                                .read(walletHomeVmProvider)
+                                .ackHint((tx['hash'] ?? '').toString()),
+                            onActiveTradeTap: _openManageTrades,
+                            activeTradeCount: activeTradeCount,
+                            walletState: s,
+                          )
+                        : const SizedBox.shrink(),
+                    animateTotal: _animateTotal,
+                    selectedWindow: s.selectedWindow,
+                    onWindowChanged: vm.setPriceWindow,
+                    reserveXlm: s.xlmTotalReserve,
+                    chartSeries: chartSeries,
+                    chartDeltaFiat: chartDeltaFiat,
                   ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                  child: s.hasWallet
-                      ? IncomingHintsStrip(
-                          colors: colors,
-                          stellarAddress: s.address ?? '',
-                          incomingHints: s.hints
-                              .map(
-                                (h) => {
-                                  'hash': h.id,
-                                  'from': h.from,
-                                  'to': h.to,
-                                  'amount': h.amount.toStringAsFixed(6),
-                                  'assetCode': h.assetCode,
-                                },
-                              )
-                              .toList(),
-                          onAcknowledge: (tx) => ref
-                              .read(walletHomeVmProvider)
-                              .ackHint((tx['hash'] ?? '').toString()),
-                          onActiveTradeTap: _openManageTrades,
-                          activeTradeCount: activeTradeCount,
-                          walletState: s,
-                        )
-                      : const SizedBox.shrink(),
                 ),
               ),
               SliverToBoxAdapter(
@@ -235,12 +282,57 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                   ),
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              SliverFillRemaining(
+                hasScrollBody: true,
+                child: AssetWidget(
+                  colors: colors,
+                  assets: walletHomeAssetList,
+                  logos: logosById,
+                  balancesByAssetId: s.balancesByAssetId,
+                  address: s.address ?? '',
+                  loading: showAssetTileSkeleton,
+                  onItemTap: (token) {
+                    vm.onReceivePressed(initialToken: token);
+                  },
+                  hasUsdcTrustline: null,
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _handleRefresh() async {
+    final walletVm = ref.read(walletHomeVmProvider);
+    final portfolioVm = ref.read(portfolioVmProvider);
+    await walletVm.refresh(force: true);
+    await portfolioVm.refreshForWallet(
+      walletState: walletVm.state,
+      trigger: WalletSnapshotTrigger.manualRefresh,
+    );
+  }
+
+  List<double> _xlmPriceWindowSeries(CurrencyVM currency, PriceWindow window) {
+    final xlmSeries = switch (window) {
+      PriceWindow.h24 => currency.xlmHistory24h,
+      PriceWindow.d7 => currency.xlmHistory7,
+      PriceWindow.d30 => currency.xlmHistory30,
+      PriceWindow.y1 => currency.xlmHistory365,
+    };
+    if (xlmSeries.where((value) => value.isFinite).length < 2) {
+      return const <double>[];
+    }
+
+    return xlmSeries.where((value) => value.isFinite).toList(growable: false);
+  }
+
+  double _seriesDelta(List<double> series) {
+    if (series.length < 2) return 0.0;
+    final first = series.first.isFinite ? series.first : 0.0;
+    final last = series.last.isFinite ? series.last : 0.0;
+    return last - first;
   }
 
   double _portfolioFiatTotal({
@@ -255,13 +347,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
       total += currency.assetAmountToFiat(asset, balance);
     }
     return total.isFinite ? total : 0.0;
-  }
-
-  Future<void> _openPortfolioScreen() async {
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PortfolioScreen()),
-    );
   }
 
   Future<void> _openRecipientList() async {
@@ -288,11 +373,112 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     } catch (_) {}
   }
 
+  Future<void> _openPortfolio() async {
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PortfolioScreen()));
+  }
+
+  Future<void> _openHeaderScanner() async {
+    final vm = ref.read(walletHomeVmProvider);
+    final portfolioVm = ref.read(portfolioVmProvider);
+    final state = vm.state;
+    final address = (state.address ?? '').trim();
+    if (address.isEmpty) {
+      if (!mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: 'Wallet not ready',
+        type: SnackBarType.warning,
+      );
+      return;
+    }
+
+    try {
+      await showTokenSelector(
+        context,
+        address,
+        balanceResolver: (asset) => state.balancesByAssetId[asset.id] ?? 0.0,
+        title: 'Select Asset',
+        screenBuilder: (addr, token, balance) => SendScreen(
+          address: addr,
+          assetId: token,
+          balance: balance,
+          autoOpenScanner: true,
+          onTransactionCompleted: () async {
+            await vm.refresh(force: true);
+            await portfolioVm.refreshForWallet(
+              walletState: vm.state,
+              trigger: WalletSnapshotTrigger.send,
+            );
+          },
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(
+          builder: (_) => SendScreen(
+            address: address,
+            assetId: 'stellar',
+            balance: state.xlm,
+            autoOpenScanner: true,
+            onTransactionCompleted: () async {
+              await vm.refresh(force: true);
+              await portfolioVm.refreshForWallet(
+                walletState: vm.state,
+                trigger: WalletSnapshotTrigger.send,
+              );
+            },
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        await vm.refresh(force: true);
+      }
+    }
+  }
+
+  Future<void> _openSwap() async {
+    if (!mounted) return;
+    final walletVm = ref.read(walletHomeVmProvider);
+    final portfolioVm = ref.read(portfolioVmProvider);
+    final swapVm = ref.read(swapVmProvider);
+    final beforeTx = swapVm.lastSuccessfulSwapTxId;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SwapScreen()),
+    );
+    if (!mounted) return;
+    await walletVm.refresh(force: true);
+    if (swapVm.lastSuccessfulSwapTxId != null &&
+        swapVm.lastSuccessfulSwapTxId != beforeTx) {
+      await portfolioVm.refreshForWallet(
+        walletState: walletVm.state,
+        trigger: WalletSnapshotTrigger.swap,
+      );
+    }
+  }
+
   Future<void> _openManageTrades() async {
     if (!mounted) return;
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const TradeHistoryScreen()));
+  }
+
+  Future<void> _openP2PMarketplace() async {
+    final allowed = await _ensureVerifiedForTradeAccess();
+    if (!allowed || !mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const MarketOffersScreen(initialType: OfferType.sell),
+      ),
+    );
   }
 
   Future<bool> _ensureVerifiedForTradeAccess() async {
@@ -331,6 +517,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     }
 
     final vm = ref.read(walletHomeVmProvider);
+    final portfolioVm = ref.read(portfolioVmProvider);
 
     if (e is NavigateToLogin) {
       Navigator.push(
@@ -345,7 +532,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
       if (!allowed || !mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => SnackBar(content: Text("Buy"))),
+        MaterialPageRoute(builder: (_) => const SnackBar(content: Text('Buy'))),
       );
       return;
     }
@@ -355,7 +542,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
       if (!allowed || !mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => SnackBar(content: Text("Sell"))),
+        MaterialPageRoute(builder: (_) => const SnackBar(content: Text('Sell'))),
       );
       return;
     }
@@ -370,12 +557,17 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     }
 
     if (e is BootBalancesLoading) {
+      setState(() => _animateTotal = false);
       return;
     }
 
     if (e is BootBalancesReady) {
+      setState(() => _animateTotal = true);
       unawaited(_autoSaveActiveWalletAddressIfMissing());
-
+      await portfolioVm.refreshForWallet(
+        walletState: vm.state,
+        trigger: _pendingPortfolioTrigger,
+      );
       return;
     }
 
@@ -389,12 +581,18 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
           address: address,
           assetId: token,
           balance: balance,
-          onTransactionCompleted: () => vm.onSuccessfulSend(),
+          onTransactionCompleted: () async {
+            await vm.refresh(force: true);
+            await portfolioVm.refreshForWallet(
+              walletState: vm.state,
+              trigger: WalletSnapshotTrigger.send,
+            );
+          },
         ),
       );
 
       if (!mounted) return;
-      await vm.onSuccessfulSend();
+      await vm.refresh(force: true);
       return;
     }
 
@@ -412,13 +610,10 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     }
 
     if (e is NavigateToSwap) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const SwapScreen()),
-      );
+      await _openSwap();
       return;
     }
- 
+
     if (e is IncomingHintAddedEvent) {
       _showPendingAlertForHint(e.hint);
       return;
@@ -426,7 +621,11 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
 
     if (e is TransactionConfirmedEvent) {
       final ctl = _hintAlertCtrls.remove(e.hash);
-      unawaited(vm.refresh(force: true));
+      await vm.refresh(force: true);
+      await portfolioVm.refreshForWallet(
+        walletState: vm.state,
+        trigger: WalletSnapshotTrigger.receiveDetected,
+      );
 
       if (ctl != null) {
         ctl.update(
@@ -444,7 +643,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     if (e is HintAcknowledgedEvent) {
       final ctl = _hintAlertCtrls.remove(e.id);
       ctl?.close();
-      return;
     }
   }
 
@@ -464,139 +662,8 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
   }
 
   String _short(String addr) {
-    if (addr.isEmpty) {
-      return '-';
-    }
+    if (addr.isEmpty) return '-';
     if (addr.length <= 12) return addr;
     return '${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}';
-  }
-}
-
-class _PortfolioShortcutCard extends StatelessWidget {
-  const _PortfolioShortcutCard({
-    required this.colors,
-    required this.currency,
-    required this.liveTotalFiat,
-    required this.walletLabel,
-    required this.walletAddress,
-    required this.onTap,
-  });
-
-  final AppColor colors;
-  final CurrencyVM currency;
-  final double liveTotalFiat;
-  final String? walletLabel;
-  final String? walletAddress;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(26),
-        onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                colors.surface.withValues(alpha: 0.98),
-                colors.surfaceRaised.withValues(alpha: 0.94),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(
-              color: colors.border.withValues(alpha: 0.16),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: colors.primary.withValues(alpha: 0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  LucideIcons.lineChart,
-                  color: colors.primary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Portfolio',
-                      style: AppFonts.title(
-                        color: colors.textPrimary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      walletLabel?.trim().isNotEmpty == true
-                          ? '${walletLabel!.trim()} • ${_shortAddress(walletAddress)}'
-                          : _shortAddress(walletAddress),
-                      style: AppFonts.body(
-                        color: colors.textSecondary,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      currency.formatFiat(liveTotalFiat),
-                      style: AppFonts.body(
-                        color: colors.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: colors.background.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  LucideIcons.arrowRight,
-                  color: colors.textPrimary,
-                  size: 18,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _shortAddress(String? address) {
-    final value = (address ?? '').trim();
-    if (value.isEmpty) return 'Wallet unavailable';
-    if (value.length <= 14) return value;
-    return '${value.substring(0, 6)}...${value.substring(value.length - 6)}';
   }
 }

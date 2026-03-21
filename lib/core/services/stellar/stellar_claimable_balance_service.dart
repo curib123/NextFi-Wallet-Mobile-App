@@ -39,6 +39,7 @@ class StellarClaimableBalanceService extends StellarBaseService {
         code: 'NO_CLAIMANTS',
       );
     }
+    validateMemoText(memoText);
 
     try {
       if (asset is! AssetTypeNative) {
@@ -244,6 +245,13 @@ class StellarClaimableBalanceService extends StellarBaseService {
     required String balanceId,
     ProgressCallback? onProgress,
   }) async {
+    if (balanceId.trim().isEmpty) {
+      fail(
+        'Claimable payment ID is missing',
+        advice: 'Refresh the claimable payments list and try again.',
+        code: 'CLAIMABLE_BALANCE_ID_MISSING',
+      );
+    }
     try {
       onProgress?.call('Claiming payment...');
       final acc = await loadAccount(keyPair.accountId);

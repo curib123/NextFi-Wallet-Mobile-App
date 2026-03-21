@@ -320,7 +320,9 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
       ctl.update(
         AppAlertType.success,
         title: 'Swap submitted',
-        subtitle: 'Transaction ID:\n$tx',
+        subtitle: vm.lastTrustlineActionMessage == null
+            ? 'Transaction ID:\n$tx'
+            : 'Transaction ID:\n$tx\n\n${vm.lastTrustlineActionMessage}',
         primaryText: 'OK',
         onPrimary: ctl.close,
       );
@@ -559,6 +561,8 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
         const SizedBox(height: 14),
         _buildPriceRow(vm, c, priceLine),
         const SizedBox(height: 14),
+        _buildTrustlineCard(vm, c),
+        const SizedBox(height: 14),
         PercentChipsRow(activePct: _lastPct, onPick: (p) => _applyPct(vm, p)),
       ],
     );
@@ -711,6 +715,114 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
     );
   }
 
+  Widget _buildTrustlineCard(SwapVM vm, AppColor c) {
+    final showDestination = vm.showDestinationTrustlineSection;
+    final showSourceRemoval = vm.showSourceTrustlineRemovalSection;
+    if (!showDestination && !showSourceRemoval) {
+      return const SizedBox.shrink();
+    }
+
+    final destinationTone =
+        vm.destinationHasTrustline || vm.autoAddDestinationTrustline
+        ? c.success
+        : c.warning;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.shieldCheck, size: 16, color: destinationTone),
+              const SizedBox(width: 8),
+              Text(
+                'Trustline Setup',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          if (showDestination) ...[
+            const SizedBox(height: 12),
+            _TrustlineToggleTile(
+              colors: c,
+              title: vm.destinationHasTrustline
+                  ? '${vm.toSymbol} trustline is active'
+                  : '${vm.toSymbol} trustline is missing',
+              subtitle: vm.destinationTrustlineHint,
+              value: vm.destinationHasTrustline || vm.autoAddDestinationTrustline,
+              enabled: !vm.destinationHasTrustline,
+              activeLabel: vm.destinationHasTrustline ? 'Active' : 'Auto-add',
+              inactiveLabel: 'Off',
+              onChanged: vm.destinationHasTrustline
+                  ? null
+                  : vm.setAutoAddDestinationTrustline,
+              tone: destinationTone,
+            ),
+          ],
+          if (showDestination && showSourceRemoval)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1, color: c.border.withValues(alpha: 0.3)),
+            ),
+          if (showSourceRemoval) ...[
+            if (!showDestination) const SizedBox(height: 12),
+            _TrustlineToggleTile(
+              colors: c,
+              title: 'Remove ${vm.fromSymbol} trustline after swap',
+              subtitle:
+                  vm.sourceTrustlineRemovalHint ??
+                  'Optional trustline cleanup after the swap.',
+              value: vm.removeSourceTrustlineAfterSwap,
+              enabled: true,
+              activeLabel: 'Remove',
+              inactiveLabel: 'Keep',
+              onChanged: vm.setRemoveSourceTrustlineAfterSwap,
+              tone: vm.removeSourceTrustlineAfterSwap ? c.warning : c.textSecondary,
+            ),
+          ],
+          if (vm.trustlineValidationMessage != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: c.warning.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(LucideIcons.alertTriangle, size: 15, color: c.warning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      vm.trustlineValidationMessage!,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget? _buildBottomBar(SwapVM vm, dynamic s, AppColor c) {
     if ((s.loading && s.accountId == null) ||
         (s.error != null && s.error!.isNotEmpty)) {
@@ -731,17 +843,105 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
               ? () => _confirmMarket(vm)
               : () {
                   HapticFeedback.selectionClick();
+                  final trustlineMessage = vm.trustlineValidationMessage;
                   showAppAlert(
                     context,
-                    type: AppAlertType.warning,
-                    title: 'Insufficient balance',
-                    subtitle:
-                        'Your available ${vm.fromSymbol} '
-                        'is not enough for this swap.',
+                    type: trustlineMessage != null
+                        ? AppAlertType.info
+                        : AppAlertType.warning,
+                    title: trustlineMessage != null
+                        ? 'Trustline setup required'
+                        : 'Insufficient balance',
+                    subtitle: trustlineMessage ??
+                        'Your available ${vm.fromSymbol} is not enough for this swap.',
                     primaryText: 'OK',
                   );
                 },
         ),
+      ),
+    );
+  }
+}
+
+class _TrustlineToggleTile extends StatelessWidget {
+  const _TrustlineToggleTile({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.enabled,
+    required this.activeLabel,
+    required this.inactiveLabel,
+    required this.onChanged,
+    required this.tone,
+  });
+
+  final AppColor colors;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final bool enabled;
+  final String activeLabel;
+  final String inactiveLabel;
+  final ValueChanged<bool>? onChanged;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Switch.adaptive(
+                value: value,
+                onChanged: enabled ? onChanged : null,
+                activeColor: tone,
+              ),
+              Text(
+                value ? activeLabel : inactiveLabel,
+                style: TextStyle(
+                  color: value ? tone : colors.textSecondary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -831,7 +1031,6 @@ class _AmountTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: c.border.withValues(alpha: 0.4)),
           ),
           child: Row(
             children: [
