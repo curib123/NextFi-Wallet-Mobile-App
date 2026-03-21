@@ -3,8 +3,8 @@
 > **A non‑custodial XLM/USDC wallet for fast, low‑cost remittances & everyday payments on Stellar.**
 
 NextFi focuses on clarity, speed, and safety. It is a private project (not for public distribution).
-
----
+  
+--- 
 
 ## Highlights
 
