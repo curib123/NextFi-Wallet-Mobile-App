@@ -259,15 +259,6 @@ final transactionsVmProvider = ChangeNotifierProvider<TransactionsVM>((ref) {
   return vm;
 });
 
-final portfolioVmProvider = ChangeNotifierProvider<PortfolioVM>((ref) {
-  final walletHome = ref.read(walletHomeVmProvider);
-  final networkMonitor = ref.read(networkMonitorProvider);
-  return PortfolioVM(
-    walletHomeVM: walletHome,
-    networkMonitor: networkMonitor,
-  );
-});
-
 final priceChartVmProvider = ChangeNotifierProvider<PriceChartVM>((ref) {
   final currency = ref.read(currencyVmProvider);
   final assets = ref.read(assetVmProvider);

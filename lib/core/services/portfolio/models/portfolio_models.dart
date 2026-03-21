@@ -310,6 +310,14 @@ String portfolioTriggerToApi(WalletSnapshotTrigger trigger) {
   }
 }
 
+String walletSnapshotTriggerToApi(WalletSnapshotTrigger trigger) {
+  return portfolioTriggerToApi(trigger);
+}
+
+WalletSnapshotTrigger walletSnapshotTriggerFromApi(String? value) {
+  return portfolioTriggerFromApi(value);
+}
+
 double _readDouble(dynamic value) {
   if (value is num) return value.toDouble();
   if (value is String) return double.tryParse(value.trim()) ?? 0.0;

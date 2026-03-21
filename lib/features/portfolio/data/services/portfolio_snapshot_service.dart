@@ -4,7 +4,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
-import 'package:next_fi/core/services/portfolio/models/portfolio_dtos.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
 import 'package:next_fi/core/services/portfolio/portfolio_core_service.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
@@ -72,7 +71,7 @@ class PortfolioSnapshotService {
         ? assets
         : assets
               .map(
-                (asset) => PortfolioSnapshotAssetRequest(
+                (asset) => CreatePortfolioSnapshotAssetRequest(
                   code: asset.code,
                   issuer: asset.issuer,
                   balance: asset.balance,
@@ -94,12 +93,12 @@ class PortfolioSnapshotService {
 
     try {
       _packageInfo ??= await PackageInfo.fromPlatform();
-      await _portfolioCore.api.createSnapshot(
+      await _portfolioCore.createSnapshot(
         CreatePortfolioSnapshotRequest(
           walletId: walletId,
           walletAddress: normalizedAddress,
           timestamp: DateTime.now(),
-          trigger: walletSnapshotTriggerToApi(trigger),
+          trigger: trigger,
           dedupeKey: dedupeKey,
           assets: enrichedAssets,
           totalValue: totalValue,
@@ -118,7 +117,7 @@ class PortfolioSnapshotService {
     }
   }
 
-  List<PortfolioSnapshotAssetRequest> _buildSnapshotAssets(
+  List<CreatePortfolioSnapshotAssetRequest> _buildSnapshotAssets(
     Map<String, double> balancesByAssetId,
   ) {
     final supportedAssets = _assets.assets.where((asset) {
@@ -128,13 +127,13 @@ class PortfolioSnapshotService {
           (symbol == 'XLM' || symbol == 'USDC');
     });
 
-    final items = <PortfolioSnapshotAssetRequest>[];
+    final items = <CreatePortfolioSnapshotAssetRequest>[];
     for (final asset in supportedAssets) {
       final balance = balancesByAssetId[asset.id] ?? 0.0;
       final price = _currency.assetUnitPriceFiat(asset);
       final fiatValue = balance * price;
       items.add(
-        PortfolioSnapshotAssetRequest(
+        CreatePortfolioSnapshotAssetRequest(
           code: _snapshotCode(asset),
           issuer: asset.issuer?.trim(),
           balance: balance,
@@ -151,7 +150,7 @@ class PortfolioSnapshotService {
   String _buildDedupeKey({
     required String walletId,
     required WalletSnapshotTrigger trigger,
-    required List<PortfolioSnapshotAssetRequest> assets,
+    required List<CreatePortfolioSnapshotAssetRequest> assets,
     required double totalValue,
   }) {
     final now = DateTime.now().toUtc();
@@ -162,7 +161,7 @@ class PortfolioSnapshotService {
       for (final asset in assets)
         '${asset.code}:${asset.issuer ?? ''}:${asset.balance.toStringAsFixed(6)}:${asset.price.toStringAsFixed(6)}'
     ].join('|');
-    return '$walletId|${walletSnapshotTriggerToApi(trigger)}|$bucket|$fingerprint';
+    return '$walletId|${portfolioTriggerToApi(trigger)}|$bucket|$fingerprint';
   }
 
   String _snapshotCode(AssetModel asset) {
