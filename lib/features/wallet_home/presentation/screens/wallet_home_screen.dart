@@ -10,6 +10,7 @@ import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
+import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
@@ -294,6 +295,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                   onItemTap: (token) {
                     vm.onReceivePressed(initialToken: token);
                   },
+                  onPortfolioTap: _openPortfolio,
                   hasUsdcTrustline: null,
                 ),
               ),
@@ -375,6 +377,13 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
 
   Future<void> _openPortfolio() async {
     if (!mounted) return;
+    final hasTokens = await TokenStorage().hasTokens;
+    if (!hasTokens) {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      return;
+    }
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const PortfolioScreen()));

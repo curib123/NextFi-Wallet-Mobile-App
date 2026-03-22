@@ -8,8 +8,10 @@ import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
+import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
+import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
 import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
@@ -30,7 +32,7 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(_bindPortfolio());
+      unawaited(_guardAndBindPortfolio());
     });
   }
 
@@ -84,6 +86,18 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _guardAndBindPortfolio() async {
+    final hasTokens = await TokenStorage().hasTokens;
+    if (!mounted) return;
+    if (!hasTokens) {
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+    await _bindPortfolio();
   }
 
   Future<void> _bindPortfolio() async {

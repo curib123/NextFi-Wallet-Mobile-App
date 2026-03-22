@@ -27,6 +27,7 @@ class AssetWidget extends ConsumerWidget {
     this.loading = false,
     this.onRefresh,
     this.onItemTap,
+    this.onPortfolioTap,
     this.embeddedInScrollView = false,
   });
 
@@ -39,6 +40,7 @@ class AssetWidget extends ConsumerWidget {
   final Future<void> Function()? onRefresh;
   final Object? hasUsdcTrustline;
   final void Function(String token)? onItemTap;
+  final VoidCallback? onPortfolioTap;
   final bool embeddedInScrollView;
 
   double _liveBalance(WalletHomeState? state, AssetModel asset) {
@@ -200,15 +202,35 @@ class AssetWidget extends ConsumerWidget {
       );
     }
 
+    final usdcIndex = sortedAssets.indexWhere(
+      (asset) => asset.symbol.trim().toUpperCase() == 'USDC',
+    );
+    final showPortfolioShortcut = onPortfolioTap != null && usdcIndex >= 0;
+    final portfolioInsertIndex = showPortfolioShortcut ? usdcIndex + 1 : -1;
+    final itemCount = sortedAssets.length + (portfolioInsertIndex >= 0 ? 1 : 0);
+
     final listView = ListView.builder(
       physics: embeddedInScrollView
           ? const NeverScrollableScrollPhysics()
           : const AlwaysScrollableScrollPhysics(),
       shrinkWrap: embeddedInScrollView,
       padding: const EdgeInsets.only(top: 8, bottom: 120),
-      itemCount: sortedAssets.length,
+      itemCount: itemCount,
       itemBuilder: (context, index) {
-        final a = sortedAssets[index];
+        if (index == portfolioInsertIndex) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _PortfolioShortcutTile(
+              colors: colors,
+              onTap: onPortfolioTap!,
+            ),
+          );
+        }
+
+        final assetIndex = portfolioInsertIndex >= 0 && index > portfolioInsertIndex
+            ? index - 1
+            : index;
+        final a = sortedAssets[assetIndex];
         final balance = _liveBalance(homeState, a);
         final pct = _pctFor(a, window);
         final coinPrice = _coinPriceFor(cur, a);
@@ -308,6 +330,85 @@ class AssetWidget extends ConsumerWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PortfolioShortcutTile extends StatelessWidget {
+  const _PortfolioShortcutTile({required this.colors, required this.onTap});
+
+  final AppColor colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: colors.border.withValues(alpha: 0.9)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    LucideIcons.pieChart,
+                    color: colors.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'View Portfolio',
+                        style: TextStyle(
+                          fontSize: 14.4,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textPrimary,
+                          letterSpacing: -0.15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Open your portfolio summary and history.',
+                        style: TextStyle(
+                          fontSize: 12.2,
+                          fontWeight: FontWeight.w600,
+                          color: colors.textSecondary,
+                          letterSpacing: -0.05,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  LucideIcons.chevronRight,
+                  color: colors.textSecondary,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
