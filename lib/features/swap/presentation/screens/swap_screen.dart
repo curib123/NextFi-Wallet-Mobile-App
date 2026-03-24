@@ -547,9 +547,17 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
+        _buildHeroCard(vm, c, fromSymbol, toSymbol),
+        const SizedBox(height: 18),
+        _buildSectionIntro(
+          c,
+          eyebrow: 'Quote',
+          title: 'Review both sides of the swap',
+        ),
+        const SizedBox(height: 10),
         _buildExchangeCard(
           vm,
           c,
@@ -558,12 +566,133 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
           balanceStr,
           minReceiveText,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
+        _buildSectionIntro(
+          c,
+          eyebrow: 'Rate',
+          title: 'Track price and minimum receive',
+        ),
+        const SizedBox(height: 10),
         _buildPriceRow(vm, c, priceLine),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
         _buildTrustlineCard(vm, c),
-        const SizedBox(height: 14),
-        PercentChipsRow(activePct: _lastPct, onPick: (p) => _applyPct(vm, p)),
+        const SizedBox(height: 18),
+        _buildSectionIntro(
+          c,
+          eyebrow: 'Quick amount',
+          title: 'Use simple presets to fill faster',
+        ),
+        const SizedBox(height: 10),
+        SectionCard(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          child: PercentChipsRow(activePct: _lastPct, onPick: (p) => _applyPct(vm, p)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeroCard(
+    SwapVM vm,
+    AppColor c,
+    String fromSymbol,
+    String toSymbol,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            c.primary.withValues(alpha: isDark ? 0.16 : 0.10),
+            c.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: c.border.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: c.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            alignment: Alignment.center,
+            child: Icon(LucideIcons.arrowRightLeft, color: c.primary, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Supported pair',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$fromSymbol to $toSymbol',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.7,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  vm.state.loading
+                      ? 'Refreshing the latest route and expected receive amount.'
+                      : 'Cleaner quote flow with clearer pricing and trustline context.',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionIntro(
+    AppColor c, {
+    required String eyebrow,
+    required String title,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow.toUpperCase(),
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.9,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          title,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.35,
+          ),
+        ),
       ],
     );
   }

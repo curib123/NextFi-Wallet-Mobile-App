@@ -1275,13 +1275,9 @@ class CurrencyVM extends ChangeNotifier {
         _streamConsecutiveErrors++;
         if (_streamConsecutiveErrors >= _maxConsecutiveErrors) {
           debugPrint(
-            'CurrencyVM: ${'$_streamConsecutiveErrors'} consecutive stream errors - zeroing rates',
+            'CurrencyVM: ${'$_streamConsecutiveErrors'} consecutive stream errors - preserving last valid rates if available',
           );
-          _ratesUnavailable = true;
-          _usingFallbackRates = false;
-          _usdcRate = 0;
-          _xlmRate = 0;
-          _lastUsdcPerXlm = 0;
+          _handleRateFailure('pair stream error');
           if (!_disposed) notifyListeners();
         }
       },
@@ -1334,13 +1330,9 @@ class CurrencyVM extends ChangeNotifier {
         _streamConsecutiveErrors++;
         if (_streamConsecutiveErrors >= _maxConsecutiveErrors) {
           debugPrint(
-            'CurrencyVM: ${'$_streamConsecutiveErrors'} consecutive stream errors - zeroing rates',
+            'CurrencyVM: ${'$_streamConsecutiveErrors'} consecutive stream errors - preserving last valid rates if available',
           );
-          _ratesUnavailable = true;
-          _usingFallbackRates = false;
-          _usdcRate = 0;
-          _xlmRate = 0;
-          _lastUsdcPerXlm = 0;
+          _handleRateFailure('pair stream reconnect error');
           if (!_disposed) notifyListeners();
         }
       },
@@ -1375,6 +1367,38 @@ class CurrencyVM extends ChangeNotifier {
     _ratesUnavailable = true;
     _usingFallbackRates = false;
     debugPrint('CurrencyVM: Rates zeroed ($reason) - UI should show N/A');
+  }
+
+  bool _hasUsableRatesInMemory() {
+    return _usdcRate > 0 &&
+        _xlmRate > 0 &&
+        _lastUsdcPerXlm > 0 &&
+        _usdcRate.isFinite &&
+        _xlmRate.isFinite &&
+        _lastUsdcPerXlm.isFinite;
+  }
+
+  void _handleRateFailure(String reason) {
+    if (_disposed) return;
+
+    if (_hasUsableRatesInMemory()) {
+      _ratesUnavailable = true;
+      _usingFallbackRates = true;
+      debugPrint(
+        'CurrencyVM: Preserving last good in-memory rates after failure ($reason)',
+      );
+      return;
+    }
+
+    final restored = _tryRestoreRatesFromRecentCache();
+    if (restored) {
+      _ratesUnavailable = true;
+      _usingFallbackRates = true;
+      debugPrint('CurrencyVM: Restored cached rates after failure ($reason)');
+      return;
+    }
+
+    _zeroRates(reason);
   }
 
   Future<void> _refreshUsdToFiat({bool force = false}) async {
@@ -1415,8 +1439,7 @@ class CurrencyVM extends ChangeNotifier {
     } catch (e) {
       if (_disposed) return;
       debugPrint('CurrencyVM: Error refreshing rates: $e');
-      final restored = _tryRestoreRatesFromRecentCache();
-      if (!restored) _zeroRates('fetch failed');
+      _handleRateFailure('fetch failed');
     } finally {
       _setLoading(false);
       if (!_disposed) notifyListeners();

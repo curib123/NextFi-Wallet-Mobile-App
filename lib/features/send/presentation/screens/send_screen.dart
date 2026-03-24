@@ -396,20 +396,46 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 onRefresh: _refresh,
                 color: c.primary,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
                   children: [
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
+                    _buildHeroCard(c, tokenStr, vm),
+                    const SizedBox(height: 18),
+                    _buildSectionIntro(
+                      c,
+                      eyebrow: 'Amount',
+                      title: 'Choose what you want to send',
+                    ),
+                    const SizedBox(height: 10),
                     _buildAmountCard(c, t, vm, tokenStr),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
+                    _buildSectionIntro(
+                      c,
+                      eyebrow: 'Recipient',
+                      title: 'Confirm who should receive it',
+                    ),
+                    const SizedBox(height: 10),
                     _buildRecipientCard(c, t, vm),
                     if (!vm.isXlm) ...[
                       const SizedBox(height: 10),
                       _buildTrustlineStatus(c, t, vm),
                     ],
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
+                    _buildSectionIntro(
+                      c,
+                      eyebrow: 'Details',
+                      title: 'Add an optional memo',
+                    ),
+                    const SizedBox(height: 10),
                     _buildMemoCard(c, t),
                     if (vm.typedAmount > 0) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 18),
+                      _buildSectionIntro(
+                        c,
+                        eyebrow: 'Review',
+                        title: 'Check the transfer breakdown',
+                      ),
+                      const SizedBox(height: 10),
                       _buildBreakdownCard(c, t, vm, tokenStr),
                     ],
                     const SizedBox(height: 100),
@@ -426,12 +452,15 @@ class _SendScreenState extends ConsumerState<SendScreen> {
 
   Widget _buildHeader(AppColor c, _ST t, String tokenStr) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(4, 6, 20, 10),
+      padding: const EdgeInsets.fromLTRB(8, 8, 18, 12),
       decoration: BoxDecoration(
         color: c.background,
-        border: Border(bottom: BorderSide(color: t.dividerColor, width: 1)),
+        border: Border(
+          bottom: BorderSide(color: t.dividerColor.withValues(alpha: 0.75), width: 1),
+        ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
@@ -444,32 +473,153 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Send',
+                  'Send funds',
                   style: TextStyle(
                     color: t.labelColor,
-                    fontSize: 11,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
+                    letterSpacing: 0.6,
                     height: 1,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   tokenStr,
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontSize: 19,
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.6,
                     height: 1.1,
                   ),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  'Minimal, fast, and easy to review before you confirm.',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -0.1,
+                  ),
+                ),
               ],
             ),
           ),
-          AssetLogo(keyOrSymbol: tokenStr, size: 34),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: c.primary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: c.primary.withValues(alpha: 0.14)),
+            ),
+            alignment: Alignment.center,
+            child: AssetLogo(keyOrSymbol: tokenStr, size: 28),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHeroCard(AppColor c, String tokenStr, SendState vm) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            c.primary.withValues(alpha: isDark ? 0.16 : 0.10),
+            c.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: c.border.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: c.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            alignment: Alignment.center,
+            child: Icon(LucideIcons.send, color: c.primary, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Available now',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_fmtAmount(vm.senderBalanceToken, decimals: vm.isXlm ? 4 : 2)} $tokenStr',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.7,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  vm.isXlm
+                      ? 'Network fee is handled automatically before sending.'
+                      : 'Recipient trustline and destination checks are shown below.',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionIntro(
+    AppColor c, {
+    required String eyebrow,
+    required String title,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow.toUpperCase(),
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.9,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          title,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.35,
+          ),
+        ),
+      ],
     );
   }
 
