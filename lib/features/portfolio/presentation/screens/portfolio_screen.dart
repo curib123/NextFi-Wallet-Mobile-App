@@ -6,17 +6,11 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
-import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
-import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
-import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
-import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
-import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
-import 'package:next_fi/features/verification_flow/presentation/screens/verification_flow_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/portfolio_overview_section.dart';
 
 class PortfolioScreen extends ConsumerStatefulWidget {
@@ -32,7 +26,7 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(_guardAndBindPortfolio());
+      unawaited(_bindPortfolio());
     });
   }
 
@@ -79,25 +73,12 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
             onReceive: _openReceive,
             onScan: _openScanSend,
             onSwap: _openSwap,
-            onP2P: _openP2PMarketplace,
             onRetry: () => portfolioVm.load(),
             onRangeChanged: portfolioVm.setRange,
           ),
         ),
       ),
     );
-  }
-
-  Future<void> _guardAndBindPortfolio() async {
-    final hasTokens = await TokenStorage().hasTokens;
-    if (!mounted) return;
-    if (!hasTokens) {
-      await Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
-      return;
-    }
-    await _bindPortfolio();
   }
 
   Future<void> _bindPortfolio() async {
@@ -128,7 +109,8 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
     await showTokenSelector(
       context,
       address,
-      balanceResolver: (asset) => walletVm.state.balancesByAssetId[asset.id] ?? 0.0,
+      balanceResolver: (asset) =>
+          walletVm.state.balancesByAssetId[asset.id] ?? 0.0,
       title: 'Select Asset',
       screenBuilder: (selectedAddress, token, balance) => SendScreen(
         address: selectedAddress,
@@ -173,7 +155,8 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
     await showTokenSelector(
       context,
       address,
-      balanceResolver: (asset) => walletVm.state.balancesByAssetId[asset.id] ?? 0.0,
+      balanceResolver: (asset) =>
+          walletVm.state.balancesByAssetId[asset.id] ?? 0.0,
       title: 'Select Asset',
       screenBuilder: (selectedAddress, token, balance) => SendScreen(
         address: selectedAddress,
@@ -214,37 +197,6 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
         trigger: WalletSnapshotTrigger.swap,
       );
     }
-  }
-
-  Future<void> _openP2PMarketplace() async {
-    final allowed = await _ensureVerifiedForTradeAccess();
-    if (!allowed || !mounted) return;
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const MarketOffersScreen(initialType: OfferType.sell),
-      ),
-    );
-  }
-
-  Future<bool> _ensureVerifiedForTradeAccess() async {
-    try {
-      final allowed = await ref.read(walletHomeVmProvider).hasTradeAccess();
-      if (allowed) return true;
-    } catch (_) {}
-
-    if (!mounted) return false;
-    showFloatingSnackBar(
-      context,
-      message: 'Verification READY is required for trades',
-      type: SnackBarType.warning,
-    );
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const VerificationFlowScreen()),
-    );
-    return false;
   }
 
   double _portfolioFiatTotal({

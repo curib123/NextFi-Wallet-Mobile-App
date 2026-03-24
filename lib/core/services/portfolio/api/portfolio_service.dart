@@ -51,7 +51,7 @@ class PortfolioService {
   }) async {
     final response = await _client.get(
       _uri(
-        PortfolioEndpoints.wallet(walletId),
+        PortfolioEndpoints.me(),
         queryParams: {'range': portfolioRangeToApi(range)},
       ),
       headers: await _headers(),

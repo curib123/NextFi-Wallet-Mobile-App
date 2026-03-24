@@ -1,10 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-import 'package:stellar_flutter_sdk/src/sep/0005/word_list.dart';
-
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
-import 'package:next_fi/core/services/wallet/wallet_manager.dart';
+import 'package:next_fi/core/services/wallet_sync/wallet_sync_service.dart';
 import 'package:next_fi/features/import_wallet/presentation/viewmodels/import_wallet_state.dart';
 
 class ImportWalletVM extends ChangeNotifier {
@@ -23,24 +21,11 @@ class ImportWalletVM extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
-
-  static final List<String> _englishWords = WordList.englishWords();
-
   String _sanitized(String text) =>
       text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   void updateText(String text) {
-    final t = text.trim();
-    final words = t.isEmpty ? <String>[] : t.split(RegExp(r'\s+'));
-    final lastWord = words.isNotEmpty ? words.last.toLowerCase() : '';
-
-    List<String> suggs = [];
-    if (lastWord.isNotEmpty) {
-      suggs = _englishWords
-          .where((w) => w.startsWith(lastWord))
-          .take(6)
-          .toList();
-    }
+    final List<String> suggs = <String>[];
     _set(_state.copyWith(rawText: text, suggestions: suggs, error: ''));
   }
 
@@ -84,11 +69,11 @@ class ImportWalletVM extends ChangeNotifier {
 
       final wallet = await Wallet.from(phrase);
       final publicAddress = await wallet.getAccountId(index: 0);
-      final existingWallets = await SeedStorage.listWallets();
-      final alreadyAdded = existingWallets.any(
-        (item) => item.publicAddress?.trim() == publicAddress.trim(),
+      final existingWalletId = await SeedStorage.findWalletIdByPublicAddress(
+        publicAddress,
       );
-      if (alreadyAdded) {
+      if (existingWalletId != null) {
+        await SeedStorage.setActiveWallet(existingWalletId);
         _set(
           _state.copyWith(
             importing: false,
@@ -117,9 +102,11 @@ class ImportWalletVM extends ChangeNotifier {
       }
 
       try {
-        await WalletManager.I.ensureLocalWalletSaved(
-          localId: newId,
-          setActiveIfCurrent: true,
+        final keyPair = await wallet.getKeyPair(index: 0);
+        await WalletSyncService.I.syncImportedWallet(
+          publicAddress: publicAddress,
+          walletName: 'Imported Wallet',
+          keyPair: keyPair,
         );
       } catch (_) {}
 

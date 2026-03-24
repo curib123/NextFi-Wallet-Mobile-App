@@ -23,6 +23,8 @@ import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 import 'package:next_fi/core/services/assets/asset_catalog_service.dart';
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/core/services/wallet_sync/wallet_sync_service.dart';
+import 'package:next_fi/core/services/website_links/website_links_service.dart';
 
 const String _kOnboardingSeenKey = 'pref.onboarding_seen.v1';
 const String _kFirstTimeKey = 'first_time';
@@ -87,6 +89,7 @@ class AppShellController extends Notifier<AppShellState> {
     if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
       state = state.copyWith(
         hasMnemonic: true,
+        isAuthenticated: true,
         showOnboarding: false,
         loading: false,
       );
@@ -174,6 +177,17 @@ final assetCatalogServiceProvider = Provider<AssetCatalogService>((ref) {
   return AssetCatalogService();
 });
 
+final websiteLinksServiceProvider = Provider<WebsiteLinksService>((ref) {
+  final service = WebsiteLinksService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+final websiteLinksProvider = FutureProvider<WebsiteLinksConfig>((ref) async {
+  final service = ref.watch(websiteLinksServiceProvider);
+  return service.getCurrent();
+});
+
 final stellarWalletServiceProvider = Provider<StellarWalletServices>((ref) {
   final config = ref.watch(appConfigProvider);
   return StellarWalletServices(
@@ -188,6 +202,51 @@ final stellarWalletServiceProvider = Provider<StellarWalletServices>((ref) {
 
 final networkMonitorProvider = ChangeNotifierProvider<NetworkMonitor>((ref) {
   return NetworkMonitor();
+});
+
+final walletSyncServiceProvider = Provider<WalletSyncService>((ref) {
+  final service = WalletSyncService.I;
+  final monitor = ref.read(networkMonitorProvider);
+  final seed = ref.read(seedKeypairProvider);
+
+  Future<void> syncActiveWallet() async {
+    if (!monitor.isOnline) return;
+    final publicAddress = (seed.accountId ?? '').trim();
+    if (publicAddress.isEmpty) return;
+    try {
+      final keyPair = await seed.deriveKeyPair();
+      await service.initializeActiveWallet(
+        publicAddress: publicAddress,
+        walletName: seed.meta?.name ?? 'Wallet',
+        keyPair: keyPair,
+      );
+    } catch (_) {}
+  }
+
+  void onMonitorChanged() {
+    if (monitor.isOnline) {
+      unawaited(syncActiveWallet());
+    }
+  }
+
+  String? lastAddress;
+  void onSeedChanged() {
+    final next = seed.accountId;
+    if (next == null || next == lastAddress) return;
+    lastAddress = next;
+    if (monitor.isOnline) {
+      unawaited(syncActiveWallet());
+    }
+  }
+
+  monitor.addListener(onMonitorChanged);
+  seed.addListener(onSeedChanged);
+  ref.onDispose(() {
+    monitor.removeListener(onMonitorChanged);
+    seed.removeListener(onSeedChanged);
+  });
+
+  return service;
 });
 
 final seedKeypairProvider = ChangeNotifierProvider<SeedKeypairVM>((ref) {
@@ -231,11 +290,13 @@ final walletHomeVmProvider = ChangeNotifierProvider<WalletHomeVM>((ref) {
   final seed = ref.read(seedKeypairProvider);
   final assets = ref.read(assetVmProvider);
   final currency = ref.read(currencyVmProvider);
+  final walletSync = ref.read(walletSyncServiceProvider);
   final vm = WalletHomeVM(
     stellar: stellar,
     seedVM: seed,
     assetVM: assets,
     currencyVM: currency,
+    walletSyncService: walletSync,
   )
     ..bindToAddress(seed.accountId);
 
@@ -268,7 +329,12 @@ final priceChartVmProvider = ChangeNotifierProvider<PriceChartVM>((ref) {
 final portfolioVmProvider = ChangeNotifierProvider<PortfolioVM>((ref) {
   final currency = ref.read(currencyVmProvider);
   final assets = ref.read(assetVmProvider);
-  return PortfolioVM(currency: currency, assetVM: assets);
+  final walletSync = ref.read(walletSyncServiceProvider);
+  return PortfolioVM(
+    currency: currency,
+    assetVM: assets,
+    walletSyncService: walletSync,
+  );
 });
 
 final importWalletVmProvider = ChangeNotifierProvider<ImportWalletVM>((ref) {

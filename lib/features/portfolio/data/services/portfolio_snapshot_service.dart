@@ -5,28 +5,20 @@ import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
-import 'package:next_fi/core/services/portfolio/portfolio_core_service.dart';
-import 'package:next_fi/core/services/secure_storage/token_storage.dart';
-import 'package:next_fi/core/services/wallet/wallet_manager.dart';
+import 'package:next_fi/core/services/wallet_sync/wallet_sync_service.dart';
 
 class PortfolioSnapshotService {
   PortfolioSnapshotService({
     required CurrencyVM currency,
     required AssetVM assets,
-    TokenStorage? tokenStorage,
-    WalletManager? walletManager,
-    PortfolioCoreService? portfolioCoreService,
+    WalletSyncService? walletSyncService,
   }) : _currency = currency,
        _assets = assets,
-       _tokenStorage = tokenStorage ?? TokenStorage(),
-       _walletManager = walletManager ?? WalletManager.I,
-       _portfolioCore = portfolioCoreService ?? PortfolioCoreService.I;
+       _walletSync = walletSyncService ?? WalletSyncService.I;
 
   final CurrencyVM _currency;
   final AssetVM _assets;
-  final TokenStorage _tokenStorage;
-  final WalletManager _walletManager;
-  final PortfolioCoreService _portfolioCore;
+  final WalletSyncService _walletSync;
 
   final Set<String> _inFlightKeys = <String>{};
   final Map<String, DateTime> _lastAppOpenByWallet = <String, DateTime>{};
@@ -41,12 +33,7 @@ class PortfolioSnapshotService {
   }) async {
     final normalizedAddress = walletAddress.trim();
     if (normalizedAddress.isEmpty) return;
-
-    final isAuthenticated = await _tokenStorage.hasTokens;
-    if (!isAuthenticated) return;
-
-    final walletId = await _walletManager.getActiveWalletBackendId();
-    if (walletId == null || walletId.trim().isEmpty) return;
+    final walletId = normalizedAddress.toUpperCase();
 
     if (trigger == WalletSnapshotTrigger.manualRefresh && !balanceChanged) {
       return;
@@ -93,8 +80,10 @@ class PortfolioSnapshotService {
 
     try {
       _packageInfo ??= await PackageInfo.fromPlatform();
-      await _portfolioCore.createSnapshot(
-        CreatePortfolioSnapshotRequest(
+      await _walletSync.queueSnapshot(
+        publicAddress: normalizedAddress,
+        dedupeKey: dedupeKey,
+        payload: CreatePortfolioSnapshotRequest(
           walletId: walletId,
           walletAddress: normalizedAddress,
           timestamp: DateTime.now(),
@@ -105,7 +94,7 @@ class PortfolioSnapshotService {
           fiatCurrency: _currency.fiatCode,
           appVersion:
               '${_packageInfo!.version}+${_packageInfo!.buildNumber}',
-        ),
+        ).toJson(),
       );
       if (trigger == WalletSnapshotTrigger.appOpen) {
         _lastAppOpenByWallet[walletId] = DateTime.now();

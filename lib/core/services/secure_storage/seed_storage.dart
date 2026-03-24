@@ -56,6 +56,9 @@ class SeedStorage {
   static String _normalizeMnemonic(String mnemonic) =>
       mnemonic.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
+  static String _normalizePublicAddress(String? address) =>
+      (address ?? '').trim().toUpperCase();
+
   static Future<void> _emitChange(
     WalletStorageChangeReason reason, {
     String? walletId,
@@ -160,7 +163,7 @@ class SeedStorage {
     }
 
     final index = await _readIndex();
-    final normalizedAddress = publicAddress?.trim();
+    final normalizedAddress = _normalizePublicAddress(publicAddress);
 
     for (final existingId in index) {
       final existingSeed = await readSeed(existingId);
@@ -168,14 +171,14 @@ class SeedStorage {
       final sameMnemonic =
           existingSeed != null && _normalizeMnemonic(existingSeed) == value;
       final sameAddress =
-          normalizedAddress != null &&
           normalizedAddress.isNotEmpty &&
-          existingMeta?.publicAddress?.trim() == normalizedAddress;
+          _normalizePublicAddress(existingMeta?.publicAddress) ==
+              normalizedAddress;
       if (!sameMnemonic && !sameAddress) continue;
 
       if (name != null && name.trim().isNotEmpty && existingMeta != null) {
         existingMeta.name = name.trim();
-        if (normalizedAddress != null && normalizedAddress.isNotEmpty) {
+        if (normalizedAddress.isNotEmpty) {
           existingMeta.publicAddress = normalizedAddress;
         }
         await _writeMeta(existingMeta);
@@ -200,9 +203,7 @@ class SeedStorage {
             : 'Primary Wallet',
         createdAt: _nowIso(),
         lastUsedAt: null,
-        publicAddress: publicAddress?.trim().isEmpty ?? true
-            ? null
-            : publicAddress!.trim(),
+        publicAddress: normalizedAddress.isEmpty ? null : normalizedAddress,
       );
       await _writeIndex([id]);
       await _storage.write(key: _seedKey(id), value: value);
@@ -220,9 +221,7 @@ class SeedStorage {
           : 'Wallet ${index.length + 1}',
       createdAt: _nowIso(),
       lastUsedAt: null,
-      publicAddress: publicAddress?.trim().isEmpty ?? true
-          ? null
-          : publicAddress!.trim(),
+      publicAddress: normalizedAddress.isEmpty ? null : normalizedAddress,
     );
 
     final next = [id, ...index];
@@ -266,12 +265,32 @@ class SeedStorage {
   static Future<bool> setWalletPublicAddress(String id, String address) async {
     final meta = await _readMeta(id);
     if (meta == null) return false;
-    final trimmed = address.trim();
-    meta.publicAddress = trimmed.isEmpty ? null : trimmed;
+    final normalized = _normalizePublicAddress(address);
+    if (normalized.isNotEmpty) {
+      final duplicateId = await findWalletIdByPublicAddress(normalized);
+      if (duplicateId != null && duplicateId != id) {
+        return false;
+      }
+    }
+    meta.publicAddress = normalized.isEmpty ? null : normalized;
     await _writeMeta(meta);
     await _setActive(id);
     await _emitChange(WalletStorageChangeReason.walletUpdated, walletId: id);
     return true;
+  }
+
+  static Future<String?> findWalletIdByPublicAddress(String address) async {
+    final normalized = _normalizePublicAddress(address);
+    if (normalized.isEmpty) return null;
+
+    final ids = await _readIndex();
+    for (final id in ids) {
+      final meta = await _readMeta(id);
+      if (_normalizePublicAddress(meta?.publicAddress) == normalized) {
+        return id;
+      }
+    }
+    return null;
   }
 
   static Future<bool> removeWallet(String id) async {

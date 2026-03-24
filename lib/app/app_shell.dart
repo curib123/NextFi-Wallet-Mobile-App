@@ -5,20 +5,15 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/navigation/app_navigation_bridge.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
-import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
 import 'package:next_fi/features/claimable/presentation/screens/claimable_list_screen.dart';
 import 'package:next_fi/features/onboarding/presentation/screens/onboarding_screen.dart';
-import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
-import 'package:next_fi/features/trades/presentation/screens/trade_history_screen.dart';
 import 'package:next_fi/features/transactions/presentation/screens/transaction_screen.dart';
-import 'package:next_fi/features/verification_flow/presentation/screens/verification_flow_screen.dart';
 import 'package:next_fi/features/wallet_creation/presentation/screens/wallet_creation_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/screens/wallet_home_screen.dart';
-import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
 
 import 'widgets/app_bottom_navigation.dart';
 
@@ -135,37 +130,6 @@ class _HomeState extends ConsumerState<Home> {
           ),
         );
         return true;
-      case 'offers':
-      case '/offers':
-      case 'market':
-      case '/market':
-      case 'p2p':
-      case '/p2p':
-        tabs.setTab(0);
-        final typeRaw = (payload['type'] ?? '').toString().toLowerCase();
-        final offerType = typeRaw == 'buy' ? OfferType.buy : OfferType.sell;
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => MarketOffersScreen(initialType: offerType),
-          ),
-        );
-        return true;
-      case 'trades':
-      case '/trades':
-        tabs.setTab(0);
-        await Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const TradeHistoryScreen()));
-        return true;
-      case 'verification':
-      case '/verification':
-      case 'kyc':
-      case '/kyc':
-        tabs.setTab(0);
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const VerificationFlowScreen()),
-        );
-        return true;
       default:
         return false;
     }
@@ -212,13 +176,6 @@ class _HomeState extends ConsumerState<Home> {
 
     if (!shell.hasMnemonic) {
       return const WalletCreationScreen();
-    }
-
-    if (!shell.isAuthenticated) {
-      return AuthGateScreen(
-        goNext: () =>
-            ref.read(appShellProvider.notifier).setAuthenticated(true),
-      );
     }
 
     return Scaffold(

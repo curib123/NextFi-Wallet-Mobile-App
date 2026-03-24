@@ -1,111 +1,65 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer_button.dart';
 import 'package:next_fi/core/widgets/modal/wallet_switch_result.dart';
-import 'package:next_fi/core/widgets/profile_avatar/user_avatar.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
-import 'package:next_fi/app/config/app_providers.dart';
-import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
 import 'package:next_fi/features/import_wallet/presentation/screens/import_wallet_screen.dart';
-import 'package:next_fi/features/profile/presentation/screens/profile_screen.dart';
 import 'package:next_fi/features/seed_phrases/presentation/screens/seed_phrase_screen.dart';
-import 'package:next_fi/features/wallet_home/presentation/viewmodels/top_bar_profile_controller.dart';
-import 'package:next_fi/app/theme/app_color.dart';
-import 'package:next_fi/core/services/auth/models/user_model.dart';
-import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
+import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
 
-class TopBar extends ConsumerStatefulWidget {
-  final GlobalKey<ScaffoldState>? scaffoldKey;
-
+class TopBar extends ConsumerWidget {
   const TopBar({super.key, this.scaffoldKey});
 
-  @override
-  ConsumerState<TopBar> createState() => _TopBarState();
-}
-
-class _TopBarState extends ConsumerState<TopBar> with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(topBarProfileControllerProvider.notifier).refresh();
-    });
-  }
+  final GlobalKey<ScaffoldState>? scaffoldKey;
 
   @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      ref.read(topBarProfileControllerProvider.notifier).refresh();
-    }
-  }
-
-  void _openDrawer(BuildContext context) {
-    if (widget.scaffoldKey != null) {
-      widget.scaffoldKey!.currentState?.openDrawer();
-    } else {
-      Scaffold.of(context).openDrawer();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = AppColor.of(context);
-    final vm = ref.watch(walletHomeVmProvider);
-    final profileState = ref.watch(topBarProfileControllerProvider);
-    final walletName = vm.state.walletName ?? 'Default Wallet';
+    final walletName =
+        ref.watch(walletHomeVmProvider).state.walletName ?? 'Default Wallet';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         children: [
           Builder(
-            builder: (ctx) =>
-                AppDrawerButton(colors: colors, onTap: () => _openDrawer(ctx)),
+            builder: (ctx) => AppDrawerButton(
+              colors: colors,
+              onTap: () => _openDrawer(ctx),
+            ),
           ),
           const Spacer(),
           _WalletSwitcher(
             walletName: walletName,
             colors: colors,
-            onTap: () => _handleWalletSwitch(context),
+            onTap: () => _handleWalletSwitch(context, ref),
           ),
           const Spacer(),
-          _ProfileActionButton(
+          _SettingsActionButton(
             colors: colors,
-            isLoading: profileState.isLoading,
-            isLoggedIn: profileState.isLoggedIn,
-            user: profileState.user,
-            onTap: () async {
-              if (!profileState.isLoggedIn || profileState.user == null) {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              } else {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              }
-              if (!mounted) return;
-              await ref
-                  .read(topBarProfileControllerProvider.notifier)
-                  .refresh();
-            },
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _handleWalletSwitch(BuildContext context) async {
+  void _openDrawer(BuildContext context) {
+    if (scaffoldKey != null) {
+      scaffoldKey!.currentState?.openDrawer();
+    } else {
+      Scaffold.of(context).openDrawer();
+    }
+  }
+
+  Future<void> _handleWalletSwitch(BuildContext context, WidgetRef ref) async {
     final activeId = await SeedStorage.getActiveWalletId();
     if (!context.mounted) return;
 
@@ -115,8 +69,7 @@ class _TopBarState extends ConsumerState<TopBar> with WidgetsBindingObserver {
       allowGenerate: true,
     );
 
-    if (res == null) return;
-    if (!context.mounted) return;
+    if (res == null || !context.mounted) return;
 
     if (res.importRequested) {
       await Navigator.push(
@@ -125,7 +78,6 @@ class _TopBarState extends ConsumerState<TopBar> with WidgetsBindingObserver {
       );
       if (!context.mounted) return;
       await ref.read(walletHomeVmProvider).boot();
-      await ref.read(topBarProfileControllerProvider.notifier).refresh();
       if (!context.mounted) return;
       showFloatingSnackBar(
         context,
@@ -142,16 +94,12 @@ class _TopBarState extends ConsumerState<TopBar> with WidgetsBindingObserver {
       );
       if (!context.mounted) return;
       await ref.read(walletHomeVmProvider).boot();
-      await ref.read(topBarProfileControllerProvider.notifier).refresh();
-      if (!context.mounted) return;
       return;
     }
 
     final chosenId = res.chosenWalletId;
     if (chosenId != null && chosenId != activeId) {
       final ok = await ref.read(walletHomeVmProvider).switchTo(chosenId);
-      if (!context.mounted) return;
-      await ref.read(topBarProfileControllerProvider.notifier).refresh();
       if (!context.mounted) return;
       showFloatingSnackBar(
         context,
@@ -163,20 +111,21 @@ class _TopBarState extends ConsumerState<TopBar> with WidgetsBindingObserver {
 }
 
 class _WalletSwitcher extends StatelessWidget {
-  final String walletName;
-  final AppColor colors;
-  final VoidCallback onTap;
-
   const _WalletSwitcher({
     required this.walletName,
     required this.colors,
     required this.onTap,
   });
 
+  final String walletName;
+  final AppColor colors;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     final title = walletName.trim().isEmpty ? 'My Wallet' : walletName.trim();
-    const subtitle = 'Non-Custodial Stellar Wallet';
+    const subtitle = 'Active wallet';
+
     return Material(
       color: AppColor.of(context).surface,
       child: InkWell(
@@ -272,20 +221,14 @@ class _WalletSwitcher extends StatelessWidget {
   }
 }
 
-class _ProfileActionButton extends StatelessWidget {
-  final AppColor colors;
-  final VoidCallback onTap;
-  final bool isLoading;
-  final bool isLoggedIn;
-  final User? user;
-
-  const _ProfileActionButton({
+class _SettingsActionButton extends StatelessWidget {
+  const _SettingsActionButton({
     required this.colors,
     required this.onTap,
-    required this.isLoading,
-    required this.isLoggedIn,
-    required this.user,
   });
+
+  final AppColor colors;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -299,22 +242,11 @@ class _ProfileActionButton extends StatelessWidget {
           shape: BoxShape.circle,
           color: colors.border.withValues(alpha: 0.08),
         ),
-        child: isLoading
-            ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colors.primary,
-                ),
-              )
-            : (isLoggedIn && user != null)
-            ? UserAvatarMedium(user: user!, colors: colors)
-            : Icon(
-                LucideIcons.userCircle2,
-                color: colors.textPrimary,
-                size: 22,
-              ),
+        child: Icon(
+          LucideIcons.settings,
+          color: colors.textPrimary,
+          size: 20,
+        ),
       ),
     );
   }

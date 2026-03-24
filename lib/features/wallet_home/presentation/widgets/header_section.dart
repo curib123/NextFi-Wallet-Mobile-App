@@ -17,7 +17,6 @@ class HeaderSection extends StatefulWidget {
     required this.loadingBalances,
     required this.totalFiat,
     required this.lastBalancesAt,
-    required this.onPortfolio,
     required this.onSwap,
     required this.onSend,
     required this.onReceive,
@@ -29,7 +28,6 @@ class HeaderSection extends StatefulWidget {
     required this.chartSeries,
     required this.chartDeltaFiat,
     this.animateTotal = false,
-    this.onP2P,
   });
 
   final AppColor colors;
@@ -37,14 +35,12 @@ class HeaderSection extends StatefulWidget {
   final bool loadingBalances;
   final double totalFiat;
   final DateTime? lastBalancesAt;
-  final VoidCallback onPortfolio;
   final VoidCallback onSwap;
   final VoidCallback onSend;
   final VoidCallback onReceive;
   final AnimationController livePulse;
   final Widget incomingStrip;
   final bool animateTotal;
-  final VoidCallback? onP2P;
   final PriceWindow selectedWindow;
   final ValueChanged<PriceWindow> onWindowChanged;
   final double reserveXlm;
@@ -201,12 +197,6 @@ class _HeaderSectionState extends State<HeaderSection> {
                           const SizedBox(width: 10),
                           _HeaderIconButton(
                             colors: widget.colors,
-                            icon: LucideIcons.pieChart,
-                            onTap: widget.onPortfolio,
-                          ),
-                          const SizedBox(width: 8),
-                          _HeaderIconButton(
-                            colors: widget.colors,
                             icon: LucideIcons.scanLine,
                             onTap: widget.onSwap,
                           ),
@@ -321,17 +311,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                 child: _ActionTile(
                   colors: widget.colors,
                   icon: LucideIcons.scanLine,
-                  label: 'Scan',
+                  label: 'Swap',
                   onTap: widget.onSwap,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ActionTile(
-                  colors: widget.colors,
-                  icon: LucideIcons.store,
-                  label: 'P2P',
-                  onTap: widget.onP2P ?? () => debugPrint('P2P'),
                 ),
               ),
             ],

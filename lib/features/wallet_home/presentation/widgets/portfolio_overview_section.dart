@@ -22,7 +22,6 @@ class PortfolioOverviewSection extends StatelessWidget {
     required this.onReceive,
     required this.onScan,
     required this.onSwap,
-    required this.onP2P,
     required this.onRetry,
     required this.onRangeChanged,
   });
@@ -38,7 +37,6 @@ class PortfolioOverviewSection extends StatelessWidget {
   final VoidCallback onReceive;
   final VoidCallback onScan;
   final VoidCallback onSwap;
-  final VoidCallback onP2P;
   final Future<void> Function() onRetry;
   final ValueChanged<PortfolioRange> onRangeChanged;
 
@@ -277,7 +275,6 @@ class PortfolioOverviewSection extends StatelessWidget {
                 _action('Receive', LucideIcons.arrowDownLeft, onReceive),
                 _action('Scan', LucideIcons.scanLine, onScan),
                 _action('Swap', LucideIcons.repeat2, onSwap),
-                _action('P2P', LucideIcons.briefcase, onP2P),
               ],
             ),
         ],
@@ -329,199 +326,165 @@ class PortfolioOverviewSection extends StatelessWidget {
   Widget _chart(PortfolioSummary? summary, List<double> series, List<String> labels) {
     if (state.loading && !state.hasData) return const _Skeleton(height: 220);
     if (state.error != null && !state.hasData) {
-      return _status(LucideIcons.alertTriangle, 'Portfolio unavailable', state.error!, true);
+      return _status(
+        LucideIcons.alertTriangle,
+        'Portfolio unavailable',
+        state.error!,
+        true,
+      );
     }
     if (state.isZeroBalance) {
-      return _status(LucideIcons.wallet, 'Zero balance', 'Fund this wallet to start building a portfolio history.', false);
+      return _status(
+        LucideIcons.wallet,
+        'Zero balance',
+        'Fund this wallet to start building a portfolio history.',
+        false,
+      );
     }
     if (state.isEmpty) {
-      return _status(LucideIcons.lineChart, 'No snapshots yet', 'The first snapshot appears after a wallet sync event.', false);
+      return _status(
+        LucideIcons.lineChart,
+        'No snapshots yet',
+        'The first snapshot appears after a wallet sync event.',
+        false,
+      );
     }
     if (state.hasInsufficientData) {
-      return _status(LucideIcons.activity, 'Insufficient data', 'We need at least two wallet snapshots to draw a chart.', false);
+      return _status(
+        LucideIcons.activity,
+        'Need more data',
+        'Keep using this wallet to build a richer portfolio trend.',
+        false,
+      );
     }
-    final positive = (summary?.absoluteChange ?? 0) >= 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Wallet history', 'Portfolio Chart', LucideIcons.lineChart),
+        _sectionTitle('Performance'),
         const SizedBox(height: 14),
-        Text(
-          currency.formatFiat(summary?.totalValue ?? liveTotalFiat),
-          style: TextStyle(
-            color: colors.textPrimary,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _rangeText(state.selectedRange),
-          style: TextStyle(
-            color: colors.textSecondary,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 18),
         SizedBox(
           height: 220,
           child: ChartArea(
             series: series,
-            positive: positive,
+            positive: (summary?.absoluteChange ?? 0) >= 0,
             onHoverIndex: (_) {},
-            accentColor: colors.primary,
-            currentPrice: series.isNotEmpty ? series.last : null,
             timeLabels: labels,
-            formatPrice: currency.formatFiat,
+            accentColor:
+                (summary?.absoluteChange ?? 0) >= 0
+                    ? colors.chartGreen
+                    : colors.chartRed,
           ),
         ),
       ],
     );
   }
 
-  Widget _activity(List<PortfolioActivityItem> items) {
+  Widget _activity(List<PortfolioActivityItem> activity) {
+    if (state.loading && !state.hasData) return const _Skeleton(height: 180);
+    if (activity.isEmpty) {
+      return _status(
+        LucideIcons.history,
+        'No recent portfolio activity',
+        'Snapshots and balance changes will appear here.',
+        false,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Wallet timeline', 'Recent Activity', LucideIcons.activity),
-        const SizedBox(height: 16),
-        if (items.isEmpty)
-          _status(LucideIcons.clock3, 'No recent activity', 'Send, receive, swap, and claim events will appear here.', false)
-        else
-          ...items.take(6).map((item) {
-            final color = _activityColor(item.trigger);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                decoration: BoxDecoration(
-                  color: colors.surface.withValues(alpha: 0.70),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: colors.border.withValues(alpha: 0.14)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(_activityIcon(item.trigger), color: color, size: 16),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_activityLabel(item.trigger), style: TextStyle(color: colors.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 4),
-                          Text(DateFormat('MMM d, HH:mm').format(item.timestamp), style: TextStyle(color: colors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                    Text(currency.formatFiat(item.totalValue), style: TextStyle(color: colors.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w700)),
-                  ],
-                ),
+        _sectionTitle('Recent activity'),
+        const SizedBox(height: 12),
+        ...activity.map((item) => _activityTile(item)),
+      ],
+    );
+  }
+
+  Widget _activityTile(PortfolioActivityItem item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border.withValues(alpha: 0.16)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: colors.chartGreen.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
               ),
-            );
-          }),
-      ],
-    );
-  }
-
-  Widget _sectionHeader(String eyebrow, String title, IconData icon) {
-    return Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                colors.primary.withValues(alpha: 0.16),
-                colors.accent.withValues(alpha: 0.08),
-              ],
+              alignment: Alignment.center,
+              child: Icon(
+                LucideIcons.trendingUp,
+                size: 18,
+                color: colors.chartGreen,
+              ),
             ),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: colors.primary, size: 17),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(eyebrow, style: TextStyle(color: colors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(title, style: TextStyle(color: colors.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _action(String label, IconData icon, VoidCallback onTap) {
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border.withValues(alpha: 0.16)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: colors.primary),
-              const SizedBox(width: 8),
-              Text(label, style: TextStyle(color: colors.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w700)),
-            ],
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _activityLabel(item.trigger),
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('MMM d, yyyy HH:mm').format(item.timestamp),
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              currency.formatFiat(item.totalValue),
+              style: TextStyle(
+                color: colors.chartGreen,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _pill(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
+  Widget _sectionTitle(String title) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: colors.textPrimary,
+        fontSize: 16,
+        fontWeight: FontWeight.w800,
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
     );
   }
 
   Widget _card(Widget child) {
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colors.surface.withValues(alpha: 0.98),
-            colors.surfaceRaised.withValues(alpha: 0.96),
-          ],
-        ),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: colors.border.withValues(alpha: 0.16)),
-        boxShadow: [
-          BoxShadow(
-            color: colors.primary.withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 10),
-          ),
-        ],
       ),
       child: child,
     );
@@ -529,129 +492,133 @@ class PortfolioOverviewSection extends StatelessWidget {
 
   Widget _status(IconData icon, String title, String subtitle, bool canRetry) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: colors.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: colors.primary, size: 22),
-        ),
+        Icon(icon, size: 34, color: colors.textSecondary),
         const SizedBox(height: 14),
-        Text(title, style: TextStyle(color: colors.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
+        Text(
+          title,
+          style: TextStyle(
+            color: colors.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: colors.textSecondary,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         if (canRetry) ...[
-          const SizedBox(height: 14),
-          FilledButton(onPressed: () => onRetry(), child: const Text('Retry')),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
         ],
       ],
     );
   }
 
-  static String _shortAddress(String? value) {
+  Widget _pill(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _action(String label, IconData icon, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border.withValues(alpha: 0.18)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: colors.textPrimary),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _shortAddress(String? value) {
     final address = (value ?? '').trim();
-    if (address.isEmpty) return 'Wallet address unavailable';
-    if (address.length <= 14) return address;
+    if (address.length <= 12) return address.isEmpty ? 'No active wallet' : address;
     return '${address.substring(0, 6)}...${address.substring(address.length - 6)}';
   }
 
-  static String _labelFor(DateTime timestamp, PortfolioRange range) {
+  String _labelFor(DateTime timestamp, PortfolioRange range) {
     switch (range) {
       case PortfolioRange.h24:
-        return DateFormat('MMM d, HH:mm').format(timestamp);
+        return DateFormat('HH:mm').format(timestamp);
       case PortfolioRange.d7:
+        return DateFormat('EEE').format(timestamp);
       case PortfolioRange.d30:
         return DateFormat('MMM d').format(timestamp);
       case PortfolioRange.all:
-        return DateFormat('MMM yyyy').format(timestamp);
+        return DateFormat('MMM yy').format(timestamp);
     }
   }
 
-  static String _rangeText(PortfolioRange range) {
-    switch (range) {
-      case PortfolioRange.h24:
-        return 'Last 24 hours';
-      case PortfolioRange.d7:
-        return 'Last 7 days';
-      case PortfolioRange.d30:
-        return 'Last 30 days';
-      case PortfolioRange.all:
-        return 'All time';
-    }
-  }
-
-  static String _activityLabel(WalletSnapshotTrigger trigger) {
+  String _activityLabel(WalletSnapshotTrigger trigger) {
     switch (trigger) {
+      case WalletSnapshotTrigger.appOpen:
+        return 'App open snapshot';
       case WalletSnapshotTrigger.send:
-        return 'Send';
+        return 'Send completed';
       case WalletSnapshotTrigger.swap:
-        return 'Swap';
+        return 'Swap completed';
       case WalletSnapshotTrigger.claim:
-        return 'Claim';
+        return 'Claim completed';
       case WalletSnapshotTrigger.receiveDetected:
-        return 'Receive';
+        return 'Incoming funds detected';
       case WalletSnapshotTrigger.walletSwitch:
-        return 'Wallet switch';
+        return 'Wallet switched';
       case WalletSnapshotTrigger.manualRefresh:
         return 'Manual refresh';
-      case WalletSnapshotTrigger.appOpen:
-        return 'App open';
-    }
-  }
-
-  Color _activityColor(WalletSnapshotTrigger trigger) {
-    switch (trigger) {
-      case WalletSnapshotTrigger.send:
-        return colors.error;
-      case WalletSnapshotTrigger.swap:
-        return colors.primary;
-      case WalletSnapshotTrigger.claim:
-        return colors.success;
-      case WalletSnapshotTrigger.receiveDetected:
-        return colors.chartGreen;
-      case WalletSnapshotTrigger.walletSwitch:
-      case WalletSnapshotTrigger.manualRefresh:
-      case WalletSnapshotTrigger.appOpen:
-        return colors.textSecondary;
-    }
-  }
-
-  static IconData _activityIcon(WalletSnapshotTrigger trigger) {
-    switch (trigger) {
-      case WalletSnapshotTrigger.send:
-        return LucideIcons.arrowUpRight;
-      case WalletSnapshotTrigger.swap:
-        return LucideIcons.repeat2;
-      case WalletSnapshotTrigger.claim:
-        return LucideIcons.badgeCheck;
-      case WalletSnapshotTrigger.receiveDetected:
-        return LucideIcons.arrowDownLeft;
-      case WalletSnapshotTrigger.walletSwitch:
-      case WalletSnapshotTrigger.manualRefresh:
-        return LucideIcons.refreshCw;
-      case WalletSnapshotTrigger.appOpen:
-        return LucideIcons.sparkles;
     }
   }
 }
 
 class _Skeleton extends StatelessWidget {
   const _Skeleton({required this.height});
+
   final double height;
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: colors.border.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(20),
-      ),
-    );
+    return SizedBox(height: height);
   }
 }

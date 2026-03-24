@@ -145,9 +145,15 @@ class WalletPortfolioData {
         : const <String, dynamic>{};
     final summaryJson = json['summary'];
     return WalletPortfolioData(
-      walletId: wallet['id']?.toString() ?? '',
-      walletAddress: wallet['address']?.toString() ?? '',
-      walletLabel: wallet['label']?.toString(),
+      walletId:
+          wallet['id']?.toString() ??
+          wallet['publicKey']?.toString() ??
+          '',
+      walletAddress:
+          wallet['address']?.toString() ??
+          wallet['publicKey']?.toString() ??
+          '',
+      walletLabel: wallet['label']?.toString() ?? wallet['publicKey']?.toString(),
       range: portfolioRangeFromApi(json['range']?.toString()),
       summary: summaryJson is Map<String, dynamic>
           ? PortfolioSummary.fromJson(summaryJson)
@@ -230,16 +236,12 @@ class CreatePortfolioSnapshotRequest {
 
   Map<String, dynamic> toJson() {
     return {
-      'walletId': walletId,
-      'walletAddress': walletAddress,
       'timestamp': timestamp.toUtc().toIso8601String(),
       'trigger': portfolioTriggerToApi(trigger),
       'dedupeKey': dedupeKey,
       'assets': assets.map((asset) => asset.toJson()).toList(growable: false),
       'totalValue': totalValue,
       'fiatCurrency': fiatCurrency.toUpperCase(),
-      if (appVersion != null && appVersion!.trim().isNotEmpty)
-        'appVersion': appVersion!.trim(),
     };
   }
 }

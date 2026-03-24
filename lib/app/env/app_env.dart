@@ -23,7 +23,11 @@ class AppEnv {
   static bool get isTestnet =>
       _read('NEXTFI_NETWORK', fallback: 'public').toLowerCase() == 'testnet';
 
-  static String get backendBaseUrl => _read('NEXTFI_BACKEND_BASE_URL');
+  static String get backendBaseUrl {
+    final current = _read('NEXTFI_API_BASE_URL');
+    if (current.isNotEmpty) return current;
+    return _read('NEXTFI_BACKEND_BASE_URL');
+  }
   static String get federationDomain =>
       _read('NEXTFI_FEDERATION_DOMAIN', fallback: 'nextfi.app');
   static String get usdcIssuerMainnet => _read('NEXTFI_USDC_ISSUER_MAINNET');
@@ -60,7 +64,9 @@ class AppEnv {
 
   static void validate() {
     final missing = <String>[];
-    if (backendBaseUrl.isEmpty) missing.add('NEXTFI_BACKEND_BASE_URL');
+    if (backendBaseUrl.isEmpty) {
+      missing.add('NEXTFI_API_BASE_URL (or NEXTFI_BACKEND_BASE_URL)');
+    }
     if (usdcIssuerMainnet.isEmpty) missing.add('NEXTFI_USDC_ISSUER_MAINNET');
     if (usdcIssuerTestnet.isEmpty) missing.add('NEXTFI_USDC_ISSUER_TESTNET');
     if (missing.isEmpty) return;

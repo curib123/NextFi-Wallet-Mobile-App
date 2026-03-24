@@ -8,22 +8,15 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
-import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
-import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
-import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
-import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
 import 'package:next_fi/features/portfolio/presentation/screens/portfolio_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
-import 'package:next_fi/features/trades/presentation/screens/trade_history_screen.dart';
-import 'package:next_fi/features/trades/presentation/viewmodels/trade_inbox_summary_provider.dart';
-import 'package:next_fi/features/verification_flow/presentation/screens/verification_flow_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/asset_widget.dart';
@@ -148,8 +141,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     final s = vm.state;
     final currency = ref.watch(currencyVmProvider);
     final assetsVm = ref.watch(assetVmProvider);
-    final tradeInboxSummary = ref.watch(tradeInboxSummaryProvider);
-    final appShell = ref.watch(appShellProvider);
 
     final allAssetList = assetsVm.assets;
     final walletHomeAssetList = assetsVm.walletHomeAssets;
@@ -169,12 +160,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     );
     final chartSeries = _xlmPriceWindowSeries(currency, s.selectedWindow);
     final chartDeltaFiat = _seriesDelta(chartSeries);
-    final activeTradeCount = appShell.isAuthenticated
-        ? tradeInboxSummary.maybeWhen(
-            data: (summary) => summary.activeTradeCount,
-            orElse: () => 0,
-          )
-        : 0;
     final logosById = <String, String>{
       for (final a in allAssetList)
         a.id: (a.primaryLogo.isNotEmpty
@@ -235,11 +220,9 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                     loadingBalances: showHeaderLoader,
                     totalFiat: totalFiat,
                     lastBalancesAt: s.lastBalancesAt,
-                    onPortfolio: _openPortfolio,
-                    onSwap: _openHeaderScanner,
+                    onSwap: _openSwap,
                     onSend: () => vm.onSendPressed(),
                     onReceive: () => vm.onReceivePressed(),
-                    onP2P: _openP2PMarketplace,
                     livePulse: _livePulse,
                     incomingStrip: s.hasWallet
                         ? IncomingHintsStrip(
@@ -259,8 +242,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                             onAcknowledge: (tx) => ref
                                 .read(walletHomeVmProvider)
                                 .ackHint((tx['hash'] ?? '').toString()),
-                            onActiveTradeTap: _openManageTrades,
-                            activeTradeCount: activeTradeCount,
                             walletState: s,
                           )
                         : const SizedBox.shrink(),
@@ -377,77 +358,9 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
 
   Future<void> _openPortfolio() async {
     if (!mounted) return;
-    final hasTokens = await TokenStorage().hasTokens;
-    if (!hasTokens) {
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
-      return;
-    }
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const PortfolioScreen()));
-  }
-
-  Future<void> _openHeaderScanner() async {
-    final vm = ref.read(walletHomeVmProvider);
-    final portfolioVm = ref.read(portfolioVmProvider);
-    final state = vm.state;
-    final address = (state.address ?? '').trim();
-    if (address.isEmpty) {
-      if (!mounted) return;
-      showFloatingSnackBar(
-        context,
-        message: 'Wallet not ready',
-        type: SnackBarType.warning,
-      );
-      return;
-    }
-
-    try {
-      await showTokenSelector(
-        context,
-        address,
-        balanceResolver: (asset) => state.balancesByAssetId[asset.id] ?? 0.0,
-        title: 'Select Asset',
-        screenBuilder: (addr, token, balance) => SendScreen(
-          address: addr,
-          assetId: token,
-          balance: balance,
-          autoOpenScanner: true,
-          onTransactionCompleted: () async {
-            await vm.refresh(force: true);
-            await portfolioVm.refreshForWallet(
-              walletState: vm.state,
-              trigger: WalletSnapshotTrigger.send,
-            );
-          },
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      await Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(
-          builder: (_) => SendScreen(
-            address: address,
-            assetId: 'stellar',
-            balance: state.xlm,
-            autoOpenScanner: true,
-            onTransactionCompleted: () async {
-              await vm.refresh(force: true);
-              await portfolioVm.refreshForWallet(
-                walletState: vm.state,
-                trigger: WalletSnapshotTrigger.send,
-              );
-            },
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        await vm.refresh(force: true);
-      }
-    }
   }
 
   Future<void> _openSwap() async {
@@ -471,44 +384,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     }
   }
 
-  Future<void> _openManageTrades() async {
-    if (!mounted) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const TradeHistoryScreen()));
-  }
-
-  Future<void> _openP2PMarketplace() async {
-    final allowed = await _ensureVerifiedForTradeAccess();
-    if (!allowed || !mounted) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const MarketOffersScreen(initialType: OfferType.sell),
-      ),
-    );
-  }
-
-  Future<bool> _ensureVerifiedForTradeAccess() async {
-    try {
-      final allowed = await ref.read(walletHomeVmProvider).hasTradeAccess();
-      if (allowed) return true;
-    } catch (_) {}
-
-    if (!mounted) return false;
-    showFloatingSnackBar(
-      context,
-      message: 'Verification READY is required for trades',
-      type: SnackBarType.warning,
-    );
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const VerificationFlowScreen()),
-    );
-    return false;
-  }
-
   void _onUiEvent(WalletHomeUiEvent e) async {
     if (!mounted) return;
 
@@ -529,29 +404,19 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     final portfolioVm = ref.read(portfolioVmProvider);
 
     if (e is NavigateToLogin) {
-      Navigator.push(
+      showFloatingSnackBar(
         context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        message: 'Wallet session required. Reconnect the active wallet.',
+        type: SnackBarType.warning,
       );
       return;
     }
 
-    if (e is StartBuyFlow) {
-      final allowed = await _ensureVerifiedForTradeAccess();
-      if (!allowed || !mounted) return;
-      Navigator.push(
+    if (e is StartBuyFlow || e is StartSellFlow) {
+      showFloatingSnackBar(
         context,
-        MaterialPageRoute(builder: (_) => const SnackBar(content: Text('Buy'))),
-      );
-      return;
-    }
-
-    if (e is StartSellFlow) {
-      final allowed = await _ensureVerifiedForTradeAccess();
-      if (!allowed || !mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const SnackBar(content: Text('Sell'))),
+        message: 'Legacy trade flow has been removed from the wallet app.',
+        type: SnackBarType.info,
       );
       return;
     }
@@ -599,15 +464,11 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
           },
         ),
       );
-
-      if (!mounted) return;
-      await vm.refresh(force: true);
       return;
     }
 
     if (e is StartReceiveFlow) {
-      Navigator.push(
-        context,
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ReceiveScreen(
             address: e.address,
@@ -624,55 +485,38 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     }
 
     if (e is IncomingHintAddedEvent) {
-      _showPendingAlertForHint(e.hint);
-      return;
-    }
+      final existing = _hintAlertCtrls.remove(e.hint.id);
+      existing?.close();
 
-    if (e is TransactionConfirmedEvent) {
-      final ctl = _hintAlertCtrls.remove(e.hash);
-      await vm.refresh(force: true);
-      await portfolioVm.refreshForWallet(
-        walletState: vm.state,
-        trigger: WalletSnapshotTrigger.receiveDetected,
+      final controller = showAppAlert(
+        context,
+        type: AppAlertType.info,
+        title: 'Incoming payment detected',
+        subtitle:
+            '${e.hint.amount.toStringAsFixed(6)} ${e.hint.assetCode} from ${e.hint.from}',
       );
-
-      if (ctl != null) {
-        ctl.update(
-          AppAlertType.success,
-          title: 'Received ${e.amount.toStringAsFixed(6)} ${e.asset}',
-          subtitle: 'Confirmed on-chain.',
-          primaryText: 'Done',
-        );
-
-        vm.ackHint(e.hash);
-      }
+      _hintAlertCtrls[e.hint.id] = controller;
       return;
     }
 
     if (e is HintAcknowledgedEvent) {
-      final ctl = _hintAlertCtrls.remove(e.id);
-      ctl?.close();
+      final controller = _hintAlertCtrls.remove(e.id);
+      controller?.close();
+      return;
     }
-  }
 
-  void _showPendingAlertForHint(dynamic h) {
-    if (!mounted) return;
-    final vm = ref.read(walletHomeVmProvider);
-    final ctl = showAppAlert(
-      context,
-      type: AppAlertType.loading,
-      title: 'Incoming ${h.amount.toStringAsFixed(6)} ${h.assetCode}',
-      subtitle: 'From ${_short(h.from)} - Pending confirmation...',
-      primaryText: 'Acknowledge',
-      onPrimary: () => vm.ackHint(h.id),
-      barrierDismissible: true,
-    );
-    _hintAlertCtrls[h.id.toString()] = ctl;
-  }
-
-  String _short(String addr) {
-    if (addr.isEmpty) return '-';
-    if (addr.length <= 12) return addr;
-    return '${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}';
+    if (e is TransactionConfirmedEvent) {
+      showFloatingSnackBar(
+        context,
+        message:
+            'Transaction confirmed: ${e.amount.toStringAsFixed(6)} ${e.asset}',
+        type: SnackBarType.success,
+      );
+      await vm.refresh(force: true);
+      await portfolioVm.refreshForWallet(
+        walletState: vm.state,
+        trigger: WalletSnapshotTrigger.send,
+      );
+    }
   }
 }

@@ -12,6 +12,7 @@ import 'package:next_fi/features/wallet_home/data/services/wallet_home_flow_serv
 import 'package:next_fi/features/wallet_home/data/models/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
+import 'package:next_fi/core/services/wallet_sync/wallet_sync_service.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart'
     as stellar
     show PaymentOperationResponse, Asset, Balance;
@@ -123,12 +124,14 @@ class WalletHomeVM extends ChangeNotifier {
     required SeedKeypairVM seedVM,
     required AssetVM assetVM,
     required CurrencyVM currencyVM,
+    required WalletSyncService walletSyncService,
     TokenStorage? tokenStorage,
     WalletHomeFlowService? flowService,
     PortfolioSnapshotService? snapshotService,
   }) : _stellar = stellar,
        _seedVM = seedVM,
        _assetVM = assetVM,
+       _walletSyncService = walletSyncService,
        _tokenStorage = tokenStorage ?? TokenStorage(),
        _flowService = flowService ?? WalletHomeFlowService(),
        _snapshotService =
@@ -136,12 +139,13 @@ class WalletHomeVM extends ChangeNotifier {
            PortfolioSnapshotService(
              currency: currencyVM,
              assets: assetVM,
-             tokenStorage: tokenStorage,
+             walletSyncService: walletSyncService,
            );
 
   final StellarWalletServices _stellar;
   final SeedKeypairVM _seedVM;
   final AssetVM _assetVM;
+  final WalletSyncService _walletSyncService;
   final TokenStorage _tokenStorage;
   final WalletHomeFlowService _flowService;
   final PortfolioSnapshotService _snapshotService;
@@ -411,6 +415,17 @@ class WalletHomeVM extends ChangeNotifier {
 
       if (changed) _restartRealtime();
 
+      try {
+        final keyPair = await _seedVM.deriveKeyPair();
+        await _walletSyncService.initializeActiveWallet(
+          publicAddress: address,
+          walletName: name ?? 'Wallet',
+          keyPair: keyPair,
+        );
+      } catch (e) {
+        debugPrint('WalletHomeVM wallet sync bootstrap error: $e');
+      }
+
       await _hydrateCachedSnapshot(address);
       await refresh(force: true, snapshotTrigger: snapshotTrigger);
 
@@ -473,6 +488,14 @@ class WalletHomeVM extends ChangeNotifier {
           balancesByAssetId: balancesByAssetId,
           hasHydratedBalances: true,
           lastBalancesAt: now,
+        ),
+      );
+      unawaited(
+        _walletSyncService.queueActivity(
+          publicAddress: addr,
+          eventType: force ? 'portfolio_refresh' : 'asset_load',
+          idempotencyKey:
+              '${force ? 'portfolio_refresh' : 'asset_load'}|$addr|${now.toUtc().toIso8601String().substring(0, 16)}',
         ),
       );
       unawaited(_persistCachedSnapshot());

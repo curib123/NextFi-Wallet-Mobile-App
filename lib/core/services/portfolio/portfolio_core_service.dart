@@ -1,6 +1,6 @@
 import 'package:next_fi/core/services/portfolio/api/portfolio_service.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
-import 'package:next_fi/core/services/secure_storage/token_storage.dart';
+import 'package:next_fi/core/services/wallet_sync/wallet_backend_client.dart';
 import 'package:next_fi/core/services/wallet/helpers/wallet_exceptions.dart';
 
 class PortfolioCoreService {
@@ -14,8 +14,7 @@ class PortfolioCoreService {
 
   static Future<String?> _safeTokenProvider() async {
     try {
-      final storage = TokenStorage();
-      return await storage.accessToken;
+      return await WalletBackendClient.I.currentActiveToken();
     } catch (_) {
       return null;
     }

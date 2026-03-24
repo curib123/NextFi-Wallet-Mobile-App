@@ -6,7 +6,7 @@ import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
 import 'package:next_fi/core/services/portfolio/portfolio_core_service.dart';
-import 'package:next_fi/core/services/wallet/wallet_manager.dart';
+import 'package:next_fi/core/services/wallet_sync/wallet_sync_service.dart';
 import 'package:next_fi/features/portfolio/presentation/viewmodels/portfolio_state.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 
@@ -14,17 +14,17 @@ class PortfolioVM extends ChangeNotifier {
   PortfolioVM({
     required CurrencyVM currency,
     required AssetVM assetVM,
+    required WalletSyncService walletSyncService,
     PortfolioCoreService? portfolioService,
-    WalletManager? walletManager,
   }) : _currency = currency,
        _assetVM = assetVM,
        _portfolioService = portfolioService ?? PortfolioCoreService.I,
-       _walletManager = walletManager ?? WalletManager.I;
+       _walletSyncService = walletSyncService;
 
   final CurrencyVM _currency;
   final AssetVM _assetVM;
   final PortfolioCoreService _portfolioService;
-  final WalletManager _walletManager;
+  final WalletSyncService _walletSyncService;
 
   static const Duration _appOpenCooldown = Duration(minutes: 15);
 
@@ -77,26 +77,11 @@ class PortfolioVM extends ChangeNotifier {
     );
 
     try {
-      final backendWallet = await _walletManager.ensureLocalWalletSaved(
-        localId: localWalletId,
-        setActiveIfCurrent: true,
-      );
-      if (_disposed || epoch != _bindEpoch) return;
-      if (backendWallet == null || backendWallet.id.trim().isEmpty) {
-        _set(
-          _state.copyWith(
-            loading: false,
-            error: 'Unable to resolve wallet portfolio.',
-          ),
-        );
-        return;
-      }
-
       _set(
         _state.copyWith(
-          activeWalletId: backendWallet.id,
-          activeWalletAddress: backendWallet.publicAddress,
-          walletLabel: normalizedLabel ?? backendWallet.label,
+          activeWalletId: normalizedAddress,
+          activeWalletAddress: normalizedAddress,
+          walletLabel: normalizedLabel,
           clearError: true,
         ),
       );
@@ -166,6 +151,21 @@ class PortfolioVM extends ChangeNotifier {
       );
     } catch (error) {
       if (_disposed || requestEpoch != _loadEpoch) return;
+      final cached = await _walletSyncService.getCachedPortfolio(
+        _state.activeWalletAddress ?? walletId,
+      );
+      if (cached != null) {
+        _set(
+          _state.copyWith(
+            data: WalletPortfolioData.fromJson(cached),
+            loading: false,
+            refreshing: false,
+            clearError: true,
+            lastLoadedWalletId: walletId,
+          ),
+        );
+        return;
+      }
       _set(
         _state.copyWith(
           loading: false,

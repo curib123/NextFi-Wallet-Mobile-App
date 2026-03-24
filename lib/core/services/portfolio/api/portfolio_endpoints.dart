@@ -3,5 +3,5 @@ class PortfolioEndpoints {
 
   static String createSnapshot() => '$base/snapshots';
 
-  static String wallet(String walletId) => '$base/wallets/$walletId';
+  static String me() => '$base/me';
 }
