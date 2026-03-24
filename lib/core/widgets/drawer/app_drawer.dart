@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/services/website_links/website_links_service.dart';
@@ -22,7 +23,7 @@ class AppDrawer extends ConsumerWidget {
     final address = (walletState.address ?? '').trim();
 
     return Drawer(
-      backgroundColor: colors.surface,
+      backgroundColor: colors.background,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -34,8 +35,9 @@ class AppDrawer extends ConsumerWidget {
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
                 children: [
+                  _SectionLabel(colors: colors, title: 'Wallet'),
                   _DrawerTile(
                     colors: colors,
                     icon: LucideIcons.settings2,
@@ -73,6 +75,8 @@ class AppDrawer extends ConsumerWidget {
                     subtitle: 'Theme, language, and app-wide preferences',
                     onTap: () => _push(context, const SettingsScreen()),
                   ),
+                  const SizedBox(height: 14),
+                  _SectionLabel(colors: colors, title: 'Links'),
                   const SizedBox(height: 8),
                   _LinkSection(
                     colors: colors,
@@ -85,6 +89,10 @@ class AppDrawer extends ConsumerWidget {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: _AppMetaCard(colors: colors),
+            ),
           ],
         ),
       ),
@@ -96,6 +104,29 @@ class AppDrawer extends ConsumerWidget {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => screen));
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.colors, required this.title});
+
+  final AppColor colors;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 10),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          color: colors.textSecondary.withValues(alpha: 0.92),
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.15,
+        ),
+      ),
+    );
   }
 }
 
@@ -113,11 +144,18 @@ class _LinkSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       decoration: BoxDecoration(
-        color: colors.background.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colors.border.withValues(alpha: 0.5)),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: colors.border.withValues(alpha: 0.62)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.primary.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,7 +188,7 @@ class _LinkSection extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _LinkRow(
             colors: colors,
             title: 'Privacy Policy',
@@ -208,9 +246,9 @@ class _LinkRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
         child: Row(
           children: [
             Expanded(
@@ -218,14 +256,15 @@ class _LinkRow extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: colors.textPrimary,
-                  fontSize: 13.2,
+                  fontSize: 13.3,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
+            const SizedBox(width: 10),
             Icon(
               LucideIcons.externalLink,
-              color: colors.textSecondary,
+              color: colors.textSecondary.withValues(alpha: 0.9),
               size: 15,
             ),
           ],
@@ -253,36 +292,73 @@ class _DrawerHeader extends StatelessWidget {
         : '${address.substring(0, 6)}...${address.substring(address.length - 6)}';
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            colors.primary.withValues(alpha: 0.18),
+            colors.primary.withValues(alpha: 0.22),
+            colors.primary.withValues(alpha: 0.08),
             colors.surface,
           ],
+          stops: const [0, 0.45, 1],
         ),
-        border: Border.all(color: colors.border.withValues(alpha: 0.6)),
+        border: Border.all(color: colors.border.withValues(alpha: 0.66)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.primary.withValues(alpha: 0.1),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              LucideIcons.wallet2,
-              color: colors.primary,
-              size: 20,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  LucideIcons.wallet2,
+                  color: colors.primary,
+                  size: 24,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: colors.surface.withValues(alpha: 0.76),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: colors.border.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(LucideIcons.radio, size: 12, color: colors.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Active Wallet',
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Text(
@@ -291,8 +367,9 @@ class _DrawerHeader extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: colors.textPrimary,
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
             ),
           ),
           const SizedBox(height: 6),
@@ -302,6 +379,35 @@ class _DrawerHeader extends StatelessWidget {
               color: colors.textSecondary,
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colors.surface.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: colors.border.withValues(alpha: 0.48)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  LucideIcons.shieldCheck,
+                  size: 16,
+                  color: colors.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Wallet-first identity and local multi-wallet access',
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 12.4,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -328,28 +434,29 @@ class _DrawerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: colors.background.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(20),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(24),
+        elevation: 0,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
                     color: colors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, color: colors.primary, size: 18),
+                  child: Icon(icon, color: colors.primary, size: 19),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 13),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,23 +474,114 @@ class _DrawerTile extends StatelessWidget {
                         subtitle,
                         style: TextStyle(
                           color: colors.textSecondary,
-                          fontSize: 11.8,
+                          fontSize: 12.1,
                           fontWeight: FontWeight.w500,
+                          height: 1.3,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Icon(
-                  LucideIcons.chevronRight,
-                  color: colors.textSecondary,
-                  size: 18,
+                const SizedBox(width: 10),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: colors.background.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    LucideIcons.arrowUpRight,
+                    color: colors.textSecondary.withValues(alpha: 0.88),
+                    size: 16,
+                  ),
                 ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AppMetaCard extends StatelessWidget {
+  const _AppMetaCard({required this.colors});
+
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        final appName = (snapshot.data?.appName ?? 'NextFi Wallet').trim();
+        final version = snapshot.hasData
+            ? 'v${snapshot.data!.version} (${snapshot.data!.buildNumber})'
+            : 'Loading version...';
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: colors.border.withValues(alpha: 0.62)),
+            boxShadow: [
+              BoxShadow(
+                color: colors.primary.withValues(alpha: 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  LucideIcons.sparkles,
+                  color: colors.primary,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      appName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 13.8,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      version,
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 12.1,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

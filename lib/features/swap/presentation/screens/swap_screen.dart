@@ -479,12 +479,12 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
     final balanceStr = '${_fmt.format(vm.fromBalance)} $fromSymbol';
 
     return Scaffold(
-      backgroundColor: c.surface,
+      backgroundColor: c.background,
       drawer: const AppDrawer(),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: c.surface,
+        backgroundColor: c.background,
         leadingWidth: 60,
         leading: Builder(
           builder: (context) => Padding(
@@ -540,24 +540,16 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
       return ErrorCard(
         message: s.error!,
         onRetry: () async {
-          await vm.refreshBalances();
+          await vm.start();
           if (mounted) setState(() {});
         },
       );
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        _buildHeroCard(vm, c, fromSymbol, toSymbol),
-        const SizedBox(height: 18),
-        _buildSectionIntro(
-          c,
-          eyebrow: 'Quote',
-          title: 'Review both sides of the swap',
-        ),
-        const SizedBox(height: 10),
         _buildExchangeCard(
           vm,
           c,
@@ -566,132 +558,14 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
           balanceStr,
           minReceiveText,
         ),
-        const SizedBox(height: 18),
-        _buildSectionIntro(
-          c,
-          eyebrow: 'Rate',
-          title: 'Track price and minimum receive',
-        ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         _buildPriceRow(vm, c, priceLine),
         const SizedBox(height: 18),
         _buildTrustlineCard(vm, c),
         const SizedBox(height: 18),
-        _buildSectionIntro(
-          c,
-          eyebrow: 'Quick amount',
-          title: 'Use simple presets to fill faster',
-        ),
-        const SizedBox(height: 10),
         SectionCard(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
           child: PercentChipsRow(activePct: _lastPct, onPick: (p) => _applyPct(vm, p)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeroCard(
-    SwapVM vm,
-    AppColor c,
-    String fromSymbol,
-    String toSymbol,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.primary.withValues(alpha: isDark ? 0.16 : 0.10),
-            c.surface,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: c.border.withValues(alpha: 0.7)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            alignment: Alignment.center,
-            child: Icon(LucideIcons.arrowRightLeft, color: c.primary, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Supported pair',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$fromSymbol to $toSymbol',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.7,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  vm.state.loading
-                      ? 'Refreshing the latest route and expected receive amount.'
-                      : 'Cleaner quote flow with clearer pricing and trustline context.',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionIntro(
-    AppColor c, {
-    required String eyebrow,
-    required String title,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          eyebrow.toUpperCase(),
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.9,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.35,
-          ),
         ),
       ],
     );
@@ -709,11 +583,10 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
       clipBehavior: Clip.none,
       children: [
         SectionCard(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+          padding: const EdgeInsets.fromLTRB(0, 4, 0, 18),
           child: Column(
             children: [
               _AmountTile(
-                label: 'You pay',
                 symbol: fromSymbol,
                 controller: _fromCtl,
                 hint: '0.0',
@@ -723,7 +596,6 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
               ),
               const SizedBox(height: 20),
               _AmountTile(
-                label: 'You receive',
                 symbol: toSymbol,
                 controller: _toCtl,
                 hint: '0.0',
@@ -733,12 +605,6 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Icon(
-                      LucideIcons.shieldCheck,
-                      size: 14,
-                      color: c.textSecondary,
-                    ),
-                    const SizedBox(width: 6),
                     Text(
                       minReceiveText,
                       style: TextStyle(color: c.textSecondary, fontSize: 12),
@@ -792,12 +658,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
 
   Widget _buildPriceRow(SwapVM vm, AppColor c, String priceLine) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border.withValues(alpha: 0.3)),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
       child: Row(
         children: [
           Icon(LucideIcons.trendingUp, size: 16, color: c.textSecondary),
@@ -857,31 +718,16 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
         : c.warning;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 14),
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withValues(alpha: 0.3)),
+        border: Border(
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.55)),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(LucideIcons.shieldCheck, size: 16, color: destinationTone),
-              const SizedBox(width: 8),
-              Text(
-                'Trustline Setup',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
           if (showDestination) ...[
-            const SizedBox(height: 12),
             _TrustlineToggleTile(
               colors: c,
               title: vm.destinationHasTrustline
@@ -961,7 +807,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
         child: CustomButton(
           text: 'Swap ${vm.fromSymbol} to ${vm.toSymbol}',
           icon: LucideIcons.arrowRightLeft,
@@ -1078,7 +924,6 @@ class _TrustlineToggleTile extends StatelessWidget {
 
 class _AmountTile extends StatelessWidget {
   const _AmountTile({
-    required this.label,
     required this.symbol,
     required this.controller,
     this.hint = '0.0',
@@ -1087,7 +932,6 @@ class _AmountTile extends StatelessWidget {
     this.onMax,
   });
 
-  final String label;
   final String symbol;
   final TextEditingController controller;
   final String hint;
@@ -1103,26 +947,14 @@ class _AmountTile extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: c.textSecondary,
-              ),
-            ),
-            const Spacer(),
             if (balanceText != null) ...[
-              Text(
-                'Balance: ',
-                style: TextStyle(fontSize: 12, color: c.textSecondary),
-              ),
+              const Spacer(),
               Text(
                 balanceText!,
                 style: TextStyle(
                   fontSize: 12,
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w500,
+                  color: c.textSecondary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               if (onMax != null) ...[
@@ -1153,28 +985,28 @@ class _AmountTile extends StatelessWidget {
             ],
           ],
         ),
-        const SizedBox(height: 8),
+        if (balanceText != null) const SizedBox(height: 8),
 
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 10),
           decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(14),
+            border: Border(
+              bottom: BorderSide(color: c.border.withValues(alpha: 0.55)),
+            ),
           ),
           child: Row(
             children: [
               InkWell(
                 onTap: onAssetTap,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(999),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 10,
+                    vertical: 9,
                   ),
                   decoration: BoxDecoration(
-                    color: c.surface,
-                    border: Border.all(color: c.border.withValues(alpha: 0.5)),
-                    borderRadius: BorderRadius.circular(10),
+                    color: c.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,

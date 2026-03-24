@@ -480,18 +480,48 @@ abstract class StellarBaseService {
     bool usingQuickNode = false;
     bool closed = false;
     int retryAttempt = 0;
+    String? lastErrorKey;
+    DateTime? lastErrorAt;
+    int repeatedErrorCount = 0;
     late Future<void> Function(StellarSDK s) start;
 
     Duration nextRetryDelay() {
       final seconds = switch (retryAttempt) {
-        0 => 1,
-        1 => 2,
-        2 => 4,
-        3 => 8,
-        _ => 15,
+        0 => 2,
+        1 => 4,
+        2 => 8,
+        3 => 15,
+        4 => 30,
+        _ => 45,
       };
       retryAttempt += 1;
       return Duration(seconds: seconds);
+    }
+
+    bool shouldForwardError(Object error) {
+      final key = '${error.runtimeType}:${error.toString()}';
+      final now = DateTime.now();
+      final sameError =
+          lastErrorKey == key &&
+          lastErrorAt != null &&
+          now.difference(lastErrorAt!) < const Duration(seconds: 45);
+
+      if (sameError) {
+        repeatedErrorCount += 1;
+      } else {
+        repeatedErrorCount = 1;
+      }
+
+      lastErrorKey = key;
+      lastErrorAt = now;
+
+      final isEventSourceSubscription =
+          error.runtimeType.toString() == 'EventSourceSubscriptionException' ||
+          error.toString().contains('EventSourceSubscriptionException');
+
+      if (!isEventSourceSubscription) return true;
+      if (repeatedErrorCount <= 2) return true;
+      return repeatedErrorCount % 10 == 0;
     }
 
     Future<void> scheduleRetry() async {
@@ -528,7 +558,7 @@ abstract class StellarBaseService {
         return;
       }
 
-      if (!controller.isClosed) {
+      if (!controller.isClosed && shouldForwardError(error)) {
         controller.addError(error, stackTrace);
       }
       await scheduleRetry();
@@ -542,6 +572,9 @@ abstract class StellarBaseService {
           sub = stream.listen(
             (event) {
               retryAttempt = 0;
+              repeatedErrorCount = 0;
+              lastErrorKey = null;
+              lastErrorAt = null;
               controller.add(event);
             },
             onError: (e, st) async {

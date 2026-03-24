@@ -18,9 +18,12 @@ class SectionCard extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withValues(alpha: 0.1), width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(
+            color: c.border.withValues(alpha: 0.55),
+          ),
+        ),
       ),
       child: child,
     );

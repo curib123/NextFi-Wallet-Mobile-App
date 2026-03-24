@@ -465,7 +465,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     final currentBal = vm.getBalanceForSymbol(_selectedAsset);
 
     return Scaffold(
-      backgroundColor: c.surface,
+      backgroundColor: c.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -477,28 +477,23 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                   padding: const EdgeInsets.fromLTRB(22, 10, 22, 28),
                   children: [
                     const SizedBox(height: 8),
-                    _buildHeroCard(c, currentBal),
-                    const SizedBox(height: 18),
                     _buildSectionIntro(
                       c,
-                      eyebrow: 'Mode',
-                      title: 'Choose how the balance can be claimed',
+                      title: 'Mode',
                     ),
                     const SizedBox(height: 10),
                     _buildModeCard(c),
                     const SizedBox(height: 18),
                     _buildSectionIntro(
                       c,
-                      eyebrow: 'Amount',
-                      title: 'Set the value and source asset',
+                      title: 'Amount',
                     ),
                     const SizedBox(height: 10),
                     _buildAmountCard(c, currentBal),
                     const SizedBox(height: 18),
                     _buildSectionIntro(
                       c,
-                      eyebrow: 'Recipient',
-                      title: 'Choose who can claim the balance',
+                      title: 'Recipient',
                     ),
                     const SizedBox(height: 10),
                     _buildRecipientCard(c),
@@ -506,8 +501,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                       const SizedBox(height: 18),
                       _buildSectionIntro(
                         c,
-                        eyebrow: 'Unlock',
-                        title: 'Set when the funds become available',
+                        title: 'Unlock',
                       ),
                       const SizedBox(height: 10),
                       _buildUnlockCard(c),
@@ -515,8 +509,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                     const SizedBox(height: 18),
                     _buildSectionIntro(
                       c,
-                      eyebrow: 'Expiry',
-                      title: 'Decide whether the balance should expire',
+                      title: 'Expiry',
                     ),
                     const SizedBox(height: 10),
                     _buildExpirationCard(c),
@@ -524,8 +517,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                       const SizedBox(height: 18),
                       _buildSectionIntro(
                         c,
-                        eyebrow: 'Rules',
-                        title: 'Understand how the claimable balance behaves',
+                        title: 'Rules',
                       ),
                       const SizedBox(height: 10),
                       _buildInfoCard(c),
@@ -573,11 +565,11 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Create protected transfers with a clearer step-by-step flow.',
+                  'Create',
                   style: TextStyle(
                     color: c.textSecondary,
                     fontSize: 12.8,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -0.1,
                   ),
                 ),
@@ -590,114 +582,28 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildHeroCard(AppColor c, double currentBal) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.primary.withValues(alpha: isDark ? 0.16 : 0.10),
-            c.surface,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: c.border.withValues(alpha: 0.7)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            alignment: Alignment.center,
-            child: Icon(LucideIcons.shieldCheck, color: c.primary, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Current balance',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${currentBal.toStringAsFixed(currentBal >= 100 ? 2 : 4)} $_selectedAsset',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.7,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Set conditions, recipient access, and optional expiry in one streamlined flow.',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSectionIntro(
     AppColor c, {
-    required String eyebrow,
     required String title,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          eyebrow.toUpperCase(),
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.9,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.35,
-          ),
-        ),
-      ],
+    return Text(
+      title,
+      style: TextStyle(
+        color: c.textPrimary,
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.35,
+      ),
     );
   }
 
   Widget _buildModeCard(AppColor c) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : c.onPrimary,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.border, width: 1),
+        border: Border(
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
+        ),
       ),
       child: Row(
         children: [
@@ -796,14 +702,13 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildAmountCard(AppColor c, double currentBal) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : c.onPrimary,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: c.border, width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -945,9 +850,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : c.onPrimary,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: c.border, width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1373,14 +1279,13 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildUnlockCard(AppColor c) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : c.onPrimary,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: c.border, width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1453,14 +1358,13 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildExpirationCard(AppColor c) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : c.onPrimary,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: c.border, width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1620,7 +1524,6 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildInfoCard(AppColor c) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isTimeLocked = _mode == ClaimableMode.timeLocked;
 
     String message;
@@ -1641,9 +1544,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : c.onPrimary,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border, width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1675,16 +1579,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildFloatingActionBar(AppColor c) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      decoration: BoxDecoration(
-        color: isDark ? c.surface : c.onPrimary,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border, width: 1),
-      ),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       child: SafeArea(
         top: false,
         child: SizedBox(

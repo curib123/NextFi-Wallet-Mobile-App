@@ -728,8 +728,30 @@ class SwapVM extends ChangeNotifier {
       _set(_state.copyWith(loading: false, error: ''));
       if (_amount > 0) _scheduleQuote(_amount);
     } catch (e) {
-      _set(_state.copyWith(loading: false, error: 'Failed to load swap: $e'));
+      _set(_state.copyWith(loading: false, error: _friendlyBootError(e)));
     }
+  }
+
+  String _friendlyBootError(Object error) {
+    final raw = error.toString().trim();
+    final normalized = raw.toLowerCase();
+
+    if (normalized.contains('no wallet found')) {
+      return 'No wallet found.';
+    }
+
+    if (normalized.contains('busy') ||
+        normalized.contains('timeout') ||
+        normalized.contains('timed out') ||
+        normalized.contains('503') ||
+        normalized.contains('failed host lookup') ||
+        normalized.contains('socketexception') ||
+        normalized.contains('connection') ||
+        normalized.contains('network')) {
+      return 'The Stellar services are busy right now. Wait a moment, then try again.';
+    }
+
+    return 'Unable to load swap right now. Please try again in a moment.';
   }
 
   void _teardownStreams() {

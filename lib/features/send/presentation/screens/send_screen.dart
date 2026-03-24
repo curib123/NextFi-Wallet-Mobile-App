@@ -396,23 +396,19 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 onRefresh: _refresh,
                 color: c.primary,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                   children: [
-                    const SizedBox(height: 18),
-                    _buildHeroCard(c, tokenStr, vm),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     _buildSectionIntro(
                       c,
-                      eyebrow: 'Amount',
-                      title: 'Choose what you want to send',
+                      title: 'Amount',
                     ),
                     const SizedBox(height: 10),
                     _buildAmountCard(c, t, vm, tokenStr),
                     const SizedBox(height: 18),
                     _buildSectionIntro(
                       c,
-                      eyebrow: 'Recipient',
-                      title: 'Confirm who should receive it',
+                      title: 'Recipient',
                     ),
                     const SizedBox(height: 10),
                     _buildRecipientCard(c, t, vm),
@@ -423,8 +419,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                     const SizedBox(height: 18),
                     _buildSectionIntro(
                       c,
-                      eyebrow: 'Details',
-                      title: 'Add an optional memo',
+                      title: 'Memo',
                     ),
                     const SizedBox(height: 10),
                     _buildMemoCard(c, t),
@@ -432,8 +427,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                       const SizedBox(height: 18),
                       _buildSectionIntro(
                         c,
-                        eyebrow: 'Review',
-                        title: 'Check the transfer breakdown',
+                        title: 'Review',
                       ),
                       const SizedBox(height: 10),
                       _buildBreakdownCard(c, t, vm, tokenStr),
@@ -495,11 +489,11 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Minimal, fast, and easy to review before you confirm.',
+                  'Transfer',
                   style: TextStyle(
                     color: c.textSecondary,
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -0.1,
                   ),
                 ),
@@ -522,104 +516,18 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     );
   }
 
-  Widget _buildHeroCard(AppColor c, String tokenStr, SendState vm) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.primary.withValues(alpha: isDark ? 0.16 : 0.10),
-            c.surface,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: c.border.withValues(alpha: 0.7)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            alignment: Alignment.center,
-            child: Icon(LucideIcons.send, color: c.primary, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Available now',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_fmtAmount(vm.senderBalanceToken, decimals: vm.isXlm ? 4 : 2)} $tokenStr',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.7,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  vm.isXlm
-                      ? 'Network fee is handled automatically before sending.'
-                      : 'Recipient trustline and destination checks are shown below.',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSectionIntro(
     AppColor c, {
-    required String eyebrow,
     required String title,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          eyebrow.toUpperCase(),
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.9,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.35,
-          ),
-        ),
-      ],
+    return Text(
+      title,
+      style: TextStyle(
+        color: c.textPrimary,
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.35,
+      ),
     );
   }
 
@@ -627,9 +535,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       decoration: BoxDecoration(
-        color: t.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: t.chipBorder, width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: t.chipBorder.withValues(alpha: 0.7), width: 1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -793,9 +702,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       decoration: BoxDecoration(
-        color: t.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: t.chipBorder, width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: t.chipBorder.withValues(alpha: 0.7), width: 1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1072,11 +982,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       decoration: BoxDecoration(
-        color: t.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: hasError ? c.error : t.chipBorder,
-          width: hasError ? 1.5 : 1,
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(
+            color: (hasError ? c.error : t.chipBorder).withValues(alpha: 0.8),
+            width: hasError ? 1.5 : 1,
+          ),
         ),
       ),
       child: Column(
@@ -1164,9 +1075,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       decoration: BoxDecoration(
-        color: t.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: t.chipBorder, width: 1),
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: t.chipBorder.withValues(alpha: 0.7), width: 1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1248,20 +1160,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   Widget _buildActionBar(AppColor c, _ST t, SendState vm) {
     final canSubmit = vm.blockingReason == null && _memoBytes <= 28;
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: t.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: t.chipBorder, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: c.textPrimary.withValues(alpha: t.isDark ? 0.20 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       child: SafeArea(
         top: false,
         child: SizedBox(

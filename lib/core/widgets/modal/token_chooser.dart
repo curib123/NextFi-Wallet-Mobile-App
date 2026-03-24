@@ -21,25 +21,27 @@ Future<void> showTokenSelector(
     listen: false,
   ).read(assetVmProvider);
 
-  double balanceFor(AssetModel a) {
+  double balanceFor(AssetModel asset) {
     if (balanceResolver != null) {
-      return balanceResolver(a);
+      return balanceResolver(asset);
     }
     return 0.0;
   }
 
-  void open(AssetModel a) {
-    final bal = balanceFor(a);
+  void open(AssetModel asset) {
+    final balance = balanceFor(asset);
     Navigator.of(context).pop();
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => screenBuilder(address, a.id, bal)),
+      MaterialPageRoute(
+        builder: (_) => screenBuilder(address, asset.id, balance),
+      ),
     );
   }
 
   await showAppModalBottomSheet(
     context,
-    builder: (ctx) => _TokenSelectorSheet(
+    builder: (_) => _TokenSelectorSheet(
       title: title,
       assets: assetVM.walletHomeAssets,
       allAssetCount: assetVM.assets.length,
@@ -70,28 +72,14 @@ class _TokenSelectorSheet extends ConsumerStatefulWidget {
 }
 
 class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
-  String? _selectedAssetId;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedAssetId = widget.assets.isEmpty ? null : widget.assets.first.id;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
+    final colors = AppColor.of(context);
     final assets = ref.watch(assetVmProvider).walletHomeAssets;
-    final selectedAssetId = assets.any((asset) => asset.id == _selectedAssetId)
-        ? _selectedAssetId
-        : (assets.isEmpty ? null : assets.first.id);
-    final selectedAsset = selectedAssetId == null
-        ? null
-        : assets.firstWhere((asset) => asset.id == selectedAssetId);
 
     return AppModalBase(
-      maxHeightFactor: 0.5,
-      backgroundColor: c.background,
+      maxHeightFactor: 0.62,
+      backgroundColor: colors.surface,
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,7 +89,7 @@ class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
             visibleAssetCount: assets.length,
             totalAssetCount: widget.allAssetCount,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Expanded(
             child: assets.isEmpty
                 ? const _EmptyState()
@@ -109,29 +97,19 @@ class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.zero,
                     itemCount: assets.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final asset = assets[index];
-                      final selected = asset.id == selectedAssetId;
                       return _SelectableTokenTile(
                         asset: asset,
                         balance: widget.balanceFor(asset),
-                        selected: selected,
                         onTap: () {
-                          setState(() => _selectedAssetId = asset.id);
                           widget.onSelect(asset);
                         },
                       );
                     },
                   ),
           ),
-          if (selectedAsset != null) ...[
-            const SizedBox(height: 12),
-            _SelectedHint(
-              asset: selectedAsset,
-              balance: widget.balanceFor(selectedAsset),
-            ),
-          ],
         ],
       ),
     );
@@ -151,44 +129,63 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    return Row(
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            gradient: c.primaryGradient,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(LucideIcons.coins, color: c.onPrimary, size: 19),
+    final colors = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colors.primary.withValues(alpha: 0.12),
+            colors.background.withValues(alpha: 0.3),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$visibleAssetCount shown · $totalAssetCount available',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.border.withValues(alpha: 0.68)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              gradient: colors.primaryGradient,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              LucideIcons.coins,
+              color: colors.onPrimary,
+              size: 19,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$visibleAssetCount visible | $totalAssetCount supported',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -197,45 +194,37 @@ class _SelectableTokenTile extends StatelessWidget {
   const _SelectableTokenTile({
     required this.asset,
     required this.balance,
-    required this.selected,
     required this.onTap,
   });
 
   final AssetModel asset;
   final double balance;
-  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
+    final colors = AppColor.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected
-                  ? c.primary.withValues(alpha: 0.7)
-                  : c.border.withValues(alpha: 0.8),
-              width: selected ? 1.4 : 1,
-            ),
+            color: colors.background.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: c.textPrimary.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: colors.textPrimary.withValues(alpha: 0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: Row(
             children: [
-              AssetLogo(keyOrSymbol: asset.id, size: 40, radius: 12),
+              AssetLogo(keyOrSymbol: asset.id, size: 42, radius: 13),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -244,39 +233,54 @@ class _SelectableTokenTile extends StatelessWidget {
                     Text(
                       asset.symbol.toUpperCase(),
                       style: TextStyle(
-                        color: c.textPrimary,
-                        fontSize: 15,
+                        color: colors.textPrimary,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       asset.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 12.5,
+                        color: colors.textSecondary,
+                        fontSize: 12.2,
                         fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Balance: ${_formatBalance(balance)}',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 11.8,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Icon(
-                selected ? LucideIcons.checkCircle2 : LucideIcons.circle,
-                color: selected ? c.primary : c.textMuted,
-                size: 20,
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _formatBalance(balance),
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 12.2,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Icon(
+                    LucideIcons.chevronRight,
+                    color: colors.textMuted,
+                    size: 16,
+                  ),
+                ],
               ),
             ],
           ),
@@ -296,65 +300,22 @@ class _SelectableTokenTile extends StatelessWidget {
     return value.toStringAsFixed(6);
   }
 }
-
-class _SelectedHint extends StatelessWidget {
-  const _SelectedHint({required this.asset, required this.balance});
-
-  final AssetModel asset;
-  final double balance;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: c.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(LucideIcons.badgeCheck, color: c.primary, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Selected: ${asset.symbol.toUpperCase()} · Balance ${_formatBalance(balance)}',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 12.4,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatBalance(double value) {
-    if (value == 0) return '0';
-    if (value.abs() >= 1000) return NumberFormat.compact().format(value);
-    if (value.abs() >= 1) return value.toStringAsFixed(4);
-    return value.toStringAsFixed(6);
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
+    final colors = AppColor.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.coins, color: c.textMuted, size: 28),
+          Icon(LucideIcons.coins, color: colors.textMuted, size: 28),
           const SizedBox(height: 10),
           Text(
             'No wallet assets available here yet.',
             style: TextStyle(
-              color: c.textPrimary,
+              color: colors.textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
@@ -364,7 +325,7 @@ class _EmptyState extends StatelessWidget {
             'This selector now follows the supported wallet assets only.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: c.textSecondary,
+              color: colors.textSecondary,
               fontSize: 12.4,
               fontWeight: FontWeight.w600,
             ),
