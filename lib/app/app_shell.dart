@@ -6,6 +6,7 @@ import 'package:next_fi/app/navigation/app_navigation_bridge.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/claimable/presentation/screens/claimable_list_screen.dart';
+import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
 import 'package:next_fi/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
@@ -176,6 +177,15 @@ class _HomeState extends ConsumerState<Home> {
 
     if (!shell.hasMnemonic) {
       return const WalletCreationScreen();
+    }
+
+    if (!shell.isAuthenticated) {
+      return AuthGateScreen(
+        goNext: () {
+          if (!mounted) return;
+          ref.read(appShellProvider.notifier).setAuthenticated(true);
+        },
+      );
     }
 
     return Scaffold(
