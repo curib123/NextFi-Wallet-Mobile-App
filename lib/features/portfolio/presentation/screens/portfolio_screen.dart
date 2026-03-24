@@ -67,6 +67,7 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
             currency: currency,
             liveTotalFiat: totalFiat,
             reserveXlm: state.xlmTotalReserve,
+            showHero: false,
             showReserveHelper: false,
             showActions: false,
             onSend: _openSend,

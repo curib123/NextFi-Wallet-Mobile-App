@@ -67,8 +67,15 @@ class AppEnv {
     if (backendBaseUrl.isEmpty) {
       missing.add('NEXTFI_API_BASE_URL (or NEXTFI_BACKEND_BASE_URL)');
     }
-    if (usdcIssuerMainnet.isEmpty) missing.add('NEXTFI_USDC_ISSUER_MAINNET');
-    if (usdcIssuerTestnet.isEmpty) missing.add('NEXTFI_USDC_ISSUER_TESTNET');
+    if (isTestnet) {
+      if (usdcIssuerTestnet.isEmpty) {
+        missing.add('NEXTFI_USDC_ISSUER_TESTNET');
+      }
+    } else {
+      if (usdcIssuerMainnet.isEmpty) {
+        missing.add('NEXTFI_USDC_ISSUER_MAINNET');
+      }
+    }
     if (missing.isEmpty) return;
     throw StateError('Missing required .env values: ${missing.join(', ')}');
   }

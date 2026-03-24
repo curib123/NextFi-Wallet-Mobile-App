@@ -16,6 +16,7 @@ class PortfolioOverviewSection extends StatelessWidget {
     required this.currency,
     required this.liveTotalFiat,
     required this.reserveXlm,
+    this.showHero = true,
     this.showReserveHelper = true,
     this.showActions = true,
     required this.onSend,
@@ -31,6 +32,7 @@ class PortfolioOverviewSection extends StatelessWidget {
   final CurrencyVM currency;
   final double liveTotalFiat;
   final double reserveXlm;
+  final bool showHero;
   final bool showReserveHelper;
   final bool showActions;
   final VoidCallback onSend;
@@ -53,8 +55,10 @@ class PortfolioOverviewSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _hero(context, totalValue, summary),
-        const SizedBox(height: 12),
+        if (showHero) ...[
+          _hero(context, totalValue, summary),
+          const SizedBox(height: 12),
+        ],
         _ranges(),
         const SizedBox(height: 12),
         _card(_chart(summary, series, labels)),

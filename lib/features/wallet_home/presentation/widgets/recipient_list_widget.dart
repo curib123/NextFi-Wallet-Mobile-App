@@ -95,7 +95,7 @@ class RecipientListWidget extends StatelessWidget {
               if (!prov.isAuthenticated) {
                 showFloatingSnackBar(
                   context,
-                  message: 'Please login first',
+                  message: 'Open an active wallet session first',
                   type: SnackBarType.warning,
                 );
                 return;
@@ -229,7 +229,7 @@ class _NotAuthenticatedView extends StatelessWidget {
                   ),
                   const SizedBox(height: _S.s24),
                   Text(
-                    'Login Required',
+                    'Wallet Session Required',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: colors.textPrimary,
@@ -240,7 +240,7 @@ class _NotAuthenticatedView extends StatelessWidget {
                   ),
                   const SizedBox(height: _S.s10),
                   Text(
-                    'Sign in to view and manage your\nsaved recipient addresses.',
+                    'Connect or reopen the active wallet to view and manage\nsaved recipient addresses for that wallet.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: colors.textSecondary,

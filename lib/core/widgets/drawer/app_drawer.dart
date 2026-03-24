@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
-import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/website_links/website_links_service.dart';
 import 'package:next_fi/core/utils/link_opener.dart';
 import 'package:next_fi/features/import_wallet/presentation/screens/import_wallet_screen.dart';
@@ -84,24 +83,6 @@ class AppDrawer extends ConsumerWidget {
                     isRefreshing: websiteLinks.isLoading,
                   ),
                 ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-              child: FutureBuilder<String?>(
-                future: SeedStorage.getActiveWalletId(),
-                builder: (context, snapshot) {
-                  final walletId = (snapshot.data ?? '').trim();
-                  if (walletId.isEmpty) return const SizedBox.shrink();
-                  return Text(
-                    'Wallet ID: $walletId',
-                    style: TextStyle(
-                      color: colors.textSecondary,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  );
-                },
               ),
             ),
           ],

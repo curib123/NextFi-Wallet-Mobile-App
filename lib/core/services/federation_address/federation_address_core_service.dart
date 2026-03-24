@@ -1,5 +1,5 @@
 import 'package:next_fi/app/config/app_config.dart';
-import 'package:next_fi/core/services/secure_storage/token_storage.dart';
+import 'package:next_fi/core/services/wallet_sync/wallet_backend_client.dart';
 
 import 'api/federation_address_service.dart';
 import 'models/federation_address_dtos.dart';
@@ -18,8 +18,7 @@ class FederationAddressCoreService {
 
   static Future<String?> _safeTokenProvider() async {
     try {
-      final storage = TokenStorage();
-      return await storage.accessToken;
+      return await WalletBackendClient.I.currentActiveToken();
     } catch (_) {
       return null;
     }

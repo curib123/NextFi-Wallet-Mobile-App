@@ -1,19 +1,16 @@
 import 'package:next_fi/core/services/recipient_wallets/recipient_wallets_service.dart';
 import 'package:next_fi/core/services/recipient_wallets/models/recipient_wallet_models.dart';
-
-import 'package:next_fi/core/services/secure_storage/token_storage.dart';
+import 'package:next_fi/core/services/wallet_sync/wallet_backend_client.dart';
 
 import '../base_url/base_url.dart' show centralizedBaseUrl;
 
 class RecipientWalletsCore {
-  final TokenStorage _tokenStorage;
   late final RecipientWalletsService svc;
 
-  RecipientWalletsCore({TokenStorage? tokenStorage})
-    : _tokenStorage = tokenStorage ?? TokenStorage() {
+  RecipientWalletsCore() {
     svc = RecipientWalletsService(
       baseUrl: centralizedBaseUrl,
-      tokenProvider: () async => await _tokenStorage.accessToken,
+      tokenProvider: () async => WalletBackendClient.I.currentActiveToken(),
     );
   }
 

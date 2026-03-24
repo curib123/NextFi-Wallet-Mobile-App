@@ -22,6 +22,7 @@ final contactListProvider =
 class ContactListNotifier extends Notifier<ContactListState> {
   static const Duration _loadTimeout = Duration(seconds: 15);
   Future<void>? _loadFuture;
+  String? _activeWalletAddress;
 
   ContactService get _service => ref.read(contactServiceProvider);
 
@@ -30,6 +31,10 @@ class ContactListNotifier extends Notifier<ContactListState> {
     final isAuthenticated = ref.watch(
       appShellProvider.select((state) => state.isAuthenticated),
     );
+    final activeWalletAddress = ref.watch(
+      seedKeypairProvider.select((vm) => vm.accountId),
+    );
+    _activeWalletAddress = activeWalletAddress?.trim().toUpperCase();
 
     ref.listen<bool>(
       appShellProvider.select((state) => state.isAuthenticated),
@@ -39,13 +44,23 @@ class ContactListNotifier extends Notifier<ContactListState> {
       },
     );
 
-    if (isAuthenticated) {
+    ref.listen<String?>(
+      seedKeypairProvider.select((vm) => vm.accountId),
+      (previous, next) {
+        final normalized = next?.trim().toUpperCase();
+        if (previous?.trim().toUpperCase() == normalized) return;
+        _syncWallet(normalized);
+      },
+    );
+
+    if (isAuthenticated && _activeWalletAddress != null && _activeWalletAddress!.isNotEmpty) {
       Future<void>.microtask(ensureLoaded);
     }
 
     return ContactListState(
-      loading: isAuthenticated,
-      isAuthenticated: isAuthenticated,
+      loading: isAuthenticated && _activeWalletAddress != null && _activeWalletAddress!.isNotEmpty,
+      isAuthenticated:
+          isAuthenticated && _activeWalletAddress != null && _activeWalletAddress!.isNotEmpty,
     );
   }
 
@@ -101,7 +116,7 @@ class ContactListNotifier extends Notifier<ContactListState> {
   }) async {
     await ensureLoaded();
     if (!state.isAuthenticated) {
-      throw Exception('Not authenticated. Please login first.');
+      throw Exception('No active wallet session. Connect or reopen your wallet first.');
     }
     final added = await _service.add(
       name: name,
@@ -131,7 +146,7 @@ class ContactListNotifier extends Notifier<ContactListState> {
   }) async {
     await ensureLoaded();
     if (!state.isAuthenticated) {
-      throw Exception('Not authenticated. Please login first.');
+      throw Exception('No active wallet session. Connect or reopen your wallet first.');
     }
     final current = state.byId(id);
     if (current == null) return null;
@@ -151,7 +166,7 @@ class ContactListNotifier extends Notifier<ContactListState> {
   Future<void> remove(String id) async {
     await ensureLoaded();
     if (!state.isAuthenticated) {
-      throw Exception('Not authenticated. Please login first.');
+      throw Exception('No active wallet session. Connect or reopen your wallet first.');
     }
     await _service.remove(id);
     state = state.copyWith(
@@ -179,11 +194,14 @@ class ContactListNotifier extends Notifier<ContactListState> {
 
   bool _isAuthError(Object error) {
     final raw = error.toString();
-    return raw.contains('Not authenticated') || raw.contains('401');
+    return raw.contains('Not authenticated') ||
+        raw.contains('401') ||
+        raw.contains('Missing wallet session token') ||
+        raw.contains('Wallet session token');
   }
 
   void _syncAuthentication(bool isAuthenticated) {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || _activeWalletAddress == null || _activeWalletAddress!.isEmpty) {
       _loadFuture = null;
       state = state.copyWith(
         items: const [],
@@ -201,5 +219,20 @@ class ContactListNotifier extends Notifier<ContactListState> {
       lastError: null,
     );
     unawaited(refresh());
+  }
+
+  void _syncWallet(String? normalizedAddress) {
+    _activeWalletAddress = normalizedAddress;
+    _loadFuture = null;
+    state = state.copyWith(
+      items: const [],
+      loading: normalizedAddress != null && normalizedAddress.isNotEmpty,
+      isAuthenticated: normalizedAddress != null && normalizedAddress.isNotEmpty,
+      initialized: false,
+      lastError: null,
+    );
+    if (normalizedAddress != null && normalizedAddress.isNotEmpty) {
+      unawaited(refresh());
+    }
   }
 }

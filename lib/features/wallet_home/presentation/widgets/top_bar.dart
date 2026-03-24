@@ -8,8 +8,8 @@ import 'package:next_fi/core/widgets/drawer/app_drawer_button.dart';
 import 'package:next_fi/core/widgets/modal/wallet_switch_result.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/import_wallet/presentation/screens/import_wallet_screen.dart';
+import 'package:next_fi/features/portfolio/presentation/screens/portfolio_screen.dart';
 import 'package:next_fi/features/seed_phrases/presentation/screens/seed_phrase_screen.dart';
-import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
 
 class TopBar extends ConsumerWidget {
   const TopBar({super.key, this.scaffoldKey});
@@ -43,7 +43,7 @@ class TopBar extends ConsumerWidget {
             colors: colors,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              MaterialPageRoute(builder: (_) => const PortfolioScreen()),
             ),
           ),
         ],
@@ -243,7 +243,7 @@ class _SettingsActionButton extends StatelessWidget {
           color: colors.border.withValues(alpha: 0.08),
         ),
         child: Icon(
-          LucideIcons.settings,
+          LucideIcons.pieChart,
           color: colors.textPrimary,
           size: 20,
         ),

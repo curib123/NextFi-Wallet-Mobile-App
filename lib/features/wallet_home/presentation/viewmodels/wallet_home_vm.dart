@@ -19,6 +19,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart'
 
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/core/services/stellar/wallet_models.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 
 enum UiSeverity { info, success, warning, error }
@@ -200,6 +201,7 @@ class WalletHomeVM extends ChangeNotifier {
 
   StreamSubscription<stellar.PaymentOperationResponse>? _incomingSub;
   StreamSubscription<Map>? _externalTxSub;
+  StreamSubscription<AccountState>? _accountStateSub;
   final Set<String> _seen = <String>{};
 
   bool _disposed = false;
@@ -584,19 +586,36 @@ class WalletHomeVM extends ChangeNotifier {
     if (!_state.hasWallet || _state.address == null) return;
 
     stopRealtime();
+    final address = _state.address!;
+    final revision = _walletRevision;
 
     _balancesTimer = Timer.periodic(_minBalancesGap, (_) {
       if (!_disposed) _kickRefreshInBackground();
     });
 
+    _accountStateSub = _stellar.accountStateStream(address).listen(
+      (accountState) {
+        _applyRealtimeAccountState(
+          address: address,
+          revision: revision,
+          accountState: accountState,
+        );
+      },
+      onError: (e) {
+        debugPrint('Account state stream error: $e');
+      },
+      cancelOnError: false,
+    );
+
     _incomingSub = _stellar
-        .paymentsStream(_state.address!)
+        .paymentsStream(address)
         .listen(
           (op) async {
             if (_disposed) return;
 
             if (op.transactionSuccessful != true) return;
             if (op.to != _state.address) return;
+            if (op.from == _state.address) return;
 
             final id = op.transactionHash;
             if (id.isEmpty || _seen.contains(id)) return;
@@ -647,6 +666,18 @@ class WalletHomeVM extends ChangeNotifier {
 
         final hash = (tx['hash'] ?? '').toString().trim();
         if (hash.isEmpty) return;
+        final direction = (tx['direction'] ?? '').toString().trim().toLowerCase();
+        final from = (tx['from'] ?? '').toString().trim();
+        final myAddress = (_state.address ?? '').trim();
+
+        final isOutgoing =
+            direction == 'out' || (myAddress.isNotEmpty && from == myAddress);
+
+        if (isOutgoing) {
+          ackHint(hash);
+        } else {
+          return;
+        }
 
         final asset = (tx['asset'] ?? 'XLM').toString();
         final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
@@ -666,6 +697,9 @@ class WalletHomeVM extends ChangeNotifier {
   void stopRealtime() {
     _balancesTimer?.cancel();
     _balancesTimer = null;
+
+    _accountStateSub?.cancel();
+    _accountStateSub = null;
 
     _incomingSub?.cancel();
     _incomingSub = null;
@@ -875,6 +909,71 @@ class WalletHomeVM extends ChangeNotifier {
       next[asset.id] = spendable > 0 ? spendable : 0.0;
     }
     return Map<String, double>.unmodifiable(next);
+  }
+
+  Map<String, double> _mapAccountStateToAssetBalances(AccountState accountState) {
+    final next = <String, double>{};
+    for (final asset in _stellarAssets) {
+      if (asset.isNative) {
+        next[asset.id] = accountState.xlm;
+        continue;
+      }
+
+      final assetKey = (asset.assetCode ?? asset.symbol).trim().toUpperCase();
+      next[asset.id] = accountState.balanceFor(assetKey);
+    }
+    return Map<String, double>.unmodifiable(next);
+  }
+
+  void _applyRealtimeAccountState({
+    required String address,
+    required int revision,
+    required AccountState accountState,
+  }) {
+    if (_disposed || revision != _walletRevision || _state.address != address) {
+      return;
+    }
+
+    final previousBalances = _state.balancesByAssetId;
+    final balancesByAssetId = _mapAccountStateToAssetBalances(accountState);
+    final balanceChanged = !_sameBalances(previousBalances, balancesByAssetId);
+    final shouldHydrate = !_state.hasHydratedBalances;
+    final now = accountState.updatedAt;
+
+    _lastFetch = now;
+
+    if (balanceChanged || shouldHydrate) {
+      _set(
+        _state.copyWith(
+          balancesByAssetId: balancesByAssetId,
+          hasHydratedBalances: true,
+          lastBalancesAt: now,
+          loadingBalances: false,
+        ),
+      );
+      unawaited(_persistCachedSnapshot());
+    }
+
+    unawaited(_fetchReserves(address, revision: revision));
+
+    if (balanceChanged) {
+      unawaited(
+        _walletSyncService.queueActivity(
+          publicAddress: address,
+          eventType: 'asset_load',
+          idempotencyKey:
+              'asset_load|$address|${now.toUtc().toIso8601String().substring(0, 19)}',
+        ),
+      );
+      unawaited(
+        _snapshotService.capture(
+          walletAddress: address,
+          balancesByAssetId: balancesByAssetId,
+          trigger: WalletSnapshotTrigger.receiveDetected,
+          balanceChanged: true,
+        ),
+      );
+    }
   }
 
   List<AssetModel> get _stellarAssets => _assetVM.assets

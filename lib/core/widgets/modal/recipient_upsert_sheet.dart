@@ -146,7 +146,7 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
     if (!prov.isAuthenticated) {
       showFloatingSnackBar(
         context,
-        message: 'Please login first to save recipients',
+        message: 'Open an active wallet session to save recipients',
         type: SnackBarType.error,
       );
       return;
@@ -198,8 +198,10 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
 
   String _friendlyError(Object e) {
     final raw = e.toString();
-    if (raw.contains('Not authenticated') || raw.contains('401')) {
-      return 'Session expired. Please login again.';
+    if (raw.contains('Not authenticated') ||
+        raw.contains('401') ||
+        raw.contains('wallet session')) {
+      return 'Wallet session expired. Reopen the active wallet and try again.';
     }
     final cleaned = raw.startsWith('Exception: ')
         ? raw.substring('Exception: '.length)
@@ -305,7 +307,7 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Please login to save recipients',
+                      'Active wallet session required to save recipients',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

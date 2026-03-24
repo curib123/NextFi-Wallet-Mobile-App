@@ -47,7 +47,7 @@ class SettingsVM extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
 
-  int _themeStyleIndex = 2;
+  int _themeStyleIndex = 1;
   int get themeStyleIndex => _themeStyleIndex;
 
   List<SettingSection> _sections = const [];
@@ -152,9 +152,9 @@ class SettingsVM extends ChangeNotifier {
     try {
       final raw = await _secure.read(key: _kThemeStylePrefKey);
       final parsed = int.tryParse(raw ?? '');
-      _themeStyleIndex = AppColor.normalizeThemeStyleIndex(parsed ?? 2);
+      _themeStyleIndex = AppColor.normalizeThemeStyleIndex(parsed ?? 1);
     } catch (_) {
-      _themeStyleIndex = 2;
+      _themeStyleIndex = 1;
     }
   }
 
