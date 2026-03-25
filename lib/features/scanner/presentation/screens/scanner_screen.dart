@@ -67,8 +67,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               onSwitchCamera: controller.switchCamera,
               onPickFromGallery: () async {
                 final message = await controller.pickQrFromGallery();
-                if (!context.mounted || message == null || message.isEmpty)
+                if (!context.mounted || message == null || message.isEmpty) {
                   return;
+                }
                 showFloatingSnackBar(
                   context,
                   message: message,

@@ -9,7 +9,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/core/widgets/button/custom_button.dart';
 import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
-import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 
 Future<bool?> showRecipientUpsertSheet(
   BuildContext context, {
@@ -45,6 +44,8 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
 
   bool _saving = false;
   bool _addrTouched = false;
+  String? _statusMessage;
+  bool _statusIsError = false;
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _addrFocus = FocusNode();
 
@@ -129,7 +130,11 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
     if (text != null && text.isNotEmpty) {
       _addr.text = text.toUpperCase().replaceAll(RegExp(r'\s+'), '');
       _addr.selection = TextSelection.collapsed(offset: _addr.text.length);
-      setState(() => _addrTouched = true);
+      setState(() {
+        _addrTouched = true;
+        _statusMessage = 'Address pasted from clipboard.';
+        _statusIsError = false;
+      });
       HapticFeedback.selectionClick();
     }
   }
@@ -144,20 +149,28 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
     }
 
     if (!prov.isAuthenticated) {
-      showFloatingSnackBar(
-        context,
-        message: 'Open an active wallet session to save recipients',
-        type: SnackBarType.error,
-      );
+      setState(() {
+        _statusMessage = 'Open an active wallet session to save recipients.';
+        _statusIsError = true;
+      });
       return;
     }
 
     if (!_formKey.currentState!.validate()) {
+      setState(() {
+        _statusMessage =
+            'Enter a name and a valid Stellar address to continue.';
+        _statusIsError = true;
+      });
       HapticFeedback.heavyImpact();
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _statusMessage = null;
+      _statusIsError = false;
+    });
     try {
       final name = _name.text.trim();
       final address = _addr.text.trim();
@@ -179,20 +192,23 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
       }
       if (!mounted) return;
       HapticFeedback.mediumImpact();
+      setState(() {
+        _statusMessage = widget.initial != null
+            ? 'Recipient updated.'
+            : 'Recipient added.';
+        _statusIsError = false;
+      });
 
       await _animController.reverse();
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-
-      showFloatingSnackBar(
-        context,
-        message: _friendlyError(e),
-        type: SnackBarType.error,
-      );
-
-      setState(() => _saving = false);
+      setState(() {
+        _statusMessage = _friendlyError(e);
+        _statusIsError = true;
+        _saving = false;
+      });
     }
   }
 
@@ -318,6 +334,45 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBanner() {
+    final message = _statusMessage;
+    if (message == null || message.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final c = AppColor.of(context);
+    final accent = _statusIsError ? c.error : c.success;
+    final icon = _statusIsError
+        ? LucideIcons.alertCircle
+        : LucideIcons.badgeCheck;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: accent,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -543,7 +598,6 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isEdit = widget.initial != null;
     final prov = ref.watch(contactListProvider);
     final canSubmit = _canSave && !prov.loading && prov.isAuthenticated;
@@ -574,12 +628,15 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
       child: SlideTransition(
         position: _slideAnimation,
         child: AppModalBase(
-          padding: EdgeInsets.only(bottom: bottomInset),
           backgroundColor: c.background,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildHeader(isEdit),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildStatusBanner(),
+              ),
               Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),

@@ -32,7 +32,7 @@ class AppModalBase extends StatelessWidget {
     this.handleBottomSpacing = 16,
     this.animateInsets = true,
     this.safeAreaTop = false,
-    this.maxHeightFactor,
+    this.maxHeightFactor = 0.75,
     this.maxWidth = 680,
   });
 
@@ -46,7 +46,7 @@ class AppModalBase extends StatelessWidget {
   final double handleBottomSpacing;
   final bool animateInsets;
   final bool safeAreaTop;
-  final double? maxHeightFactor;
+  final double maxHeightFactor;
   final double maxWidth;
 
   @override
@@ -64,14 +64,13 @@ class AppModalBase extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: maxWidth,
-          maxHeight: maxHeightFactor == null
-              ? media.size.height * 0.94
-              : media.size.height * maxHeightFactor!,
+          maxHeight: media.size.height * maxHeightFactor,
         ),
         child: Container(
           margin: defaultMargin
               ? EdgeInsets.fromLTRB(horizontalMargin, 0, horizontalMargin, 12)
               : margin,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: backgroundColor ?? colors.surface,
             borderRadius: borderRadius,
@@ -92,7 +91,7 @@ class AppModalBase extends StatelessWidget {
             child: Padding(
               padding: padding,
               child: Column(
-                mainAxisSize: MainAxisSize.max,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   if (showHandle)
                     Container(

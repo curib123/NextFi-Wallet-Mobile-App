@@ -13,6 +13,8 @@ class SeedPhraseVM extends ChangeNotifier {
   SeedPhraseState get state => _state;
 
   bool _disposed = false;
+  Future<bool>? _saveSecurelyFuture;
+  String? _lastSavedPublicAddress;
 
   void _set(SeedPhraseState s) {
     _state = s;
@@ -121,6 +123,23 @@ class SeedPhraseVM extends ChangeNotifier {
   }
 
   Future<bool> saveSecurely() async {
+    final pending = _saveSecurelyFuture;
+    if (pending != null) {
+      return pending;
+    }
+
+    final future = _runSaveSecurely();
+    _saveSecurelyFuture = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_saveSecurelyFuture, future)) {
+        _saveSecurelyFuture = null;
+      }
+    }
+  }
+
+  Future<bool> _runSaveSecurely() async {
     final phrase = normalized();
 
     if (!isValidWordCount) {
@@ -146,6 +165,15 @@ class SeedPhraseVM extends ChangeNotifier {
       _set(_state.copyWith(loading: true, error: ''));
 
       final publicAddress = await _svc.getAccountIdFromMnemonic(phrase);
+      final existingWalletId = await SeedStorage.findWalletIdByPublicAddress(
+        publicAddress,
+      );
+      if (existingWalletId != null &&
+          _lastSavedPublicAddress == publicAddress) {
+        await SeedStorage.setActiveWallet(existingWalletId);
+        _set(_state.copyWith(loading: false, error: ''));
+        return true;
+      }
 
       final localId = await SeedStorage.addWallet(
         phrase,
@@ -185,6 +213,7 @@ class SeedPhraseVM extends ChangeNotifier {
         );
       } catch (_) {}
 
+      _lastSavedPublicAddress = publicAddress;
       _set(_state.copyWith(loading: false));
       debugPrint(
         'SeedPhraseVM: Saved ${_state.words.length}-word mnemonic successfully',

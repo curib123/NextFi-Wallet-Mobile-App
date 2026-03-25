@@ -12,11 +12,13 @@ class WalletSwitchResult {
   final String? chosenWalletId;
   final bool createNew;
   final bool importRequested;
+  final bool switchedInSheet;
 
   const WalletSwitchResult({
     this.chosenWalletId,
     this.createNew = false,
     this.importRequested = false,
+    this.switchedInSheet = false,
   });
 }
 
@@ -144,7 +146,12 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
         return;
       }
       if (!mounted) return;
-      await _loadWallets();
+      Navigator.of(context).pop(
+        WalletSwitchResult(
+          chosenWalletId: wallet.localId,
+          switchedInSheet: true,
+        ),
+      );
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -273,52 +280,46 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Stack(
-        children: [
-          Container(
-            margin: const EdgeInsets.only(top: 54),
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.84,
-            ),
-            decoration: BoxDecoration(
-              color: widget.colors.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
+    return Stack(
+      children: [
+        AppModalBase(
+          backgroundColor: widget.colors.surface,
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          maxHeightFactor: 0.75,
+          showHandle: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SheetHeader(
+                colors: widget.colors,
+                totalCount: _localWallets.length + _cloudWallets.length,
               ),
-            ),
-            child: Column(
-              children: [
-                _SheetHeader(
-                  colors: widget.colors,
-                  totalCount: _localWallets.length + _cloudWallets.length,
-                ),
-                Expanded(child: _buildContent()),
-                _SheetFooter(
-                  colors: widget.colors,
-                  allowGenerate: widget.allowGenerate,
-                  generateLabel: widget.generateLabel,
-                  importLabel: widget.importLabel,
-                ),
-              ],
-            ),
+              const SizedBox(height: 12),
+              Flexible(child: _buildContent()),
+              const SizedBox(height: 14),
+              _SheetFooter(
+                colors: widget.colors,
+                allowGenerate: widget.allowGenerate,
+                generateLabel: widget.generateLabel,
+                importLabel: widget.importLabel,
+              ),
+            ],
           ),
-          if (_working)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
+        ),
+        if (_working)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
                   color: AppColor.of(
                     context,
                   ).textPrimary.withValues(alpha: 0.16),
-                  child: const Center(child: CircularProgressIndicator()),
                 ),
+                child: const Center(child: CircularProgressIndicator()),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -442,10 +443,9 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
                 isToggling: _togglingId == wallet.localId,
                 canDelete: !wallet.isActive,
                 onToggleActive: () => _toggleActiveWallet(wallet),
-                onTap: () => Navigator.pop(
-                  context,
-                  WalletSwitchResult(chosenWalletId: wallet.localId),
-                ),
+                onTap: wallet.isActive
+                    ? null
+                    : () => _toggleActiveWallet(wallet),
                 onDelete: wallet.isActive
                     ? null
                     : () => _deleteLocalWallet(wallet),
@@ -564,7 +564,7 @@ class _WalletCard extends StatelessWidget {
     this.isToggling = false,
     required this.canDelete,
     required this.onToggleActive,
-    required this.onTap,
+    this.onTap,
     this.onDelete,
   });
 
@@ -574,7 +574,7 @@ class _WalletCard extends StatelessWidget {
   final bool isToggling;
   final bool canDelete;
   final VoidCallback onToggleActive;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final VoidCallback? onDelete;
 
   @override

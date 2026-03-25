@@ -83,6 +83,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         );
                       }
 
+                      if (it.action == SettingAction.authGate) {
+                        return Switch.adaptive(
+                          value: vm.authGateEnabled,
+                          onChanged: (val) => vm.onToggleAuthGate(context, val),
+                        );
+                      }
+
                       return const SizedBox.shrink();
                     },
                   ),

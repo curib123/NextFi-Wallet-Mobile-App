@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-enum SettingAction { wallet, changePin, fiatCurrency, biometrics, themeMode }
+enum SettingAction {
+  wallet,
+  changePin,
+  authGate,
+  fiatCurrency,
+  biometrics,
+  themeMode,
+}
 
 @immutable
 class SettingItem {

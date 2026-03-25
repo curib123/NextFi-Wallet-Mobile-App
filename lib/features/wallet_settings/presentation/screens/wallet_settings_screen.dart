@@ -9,6 +9,7 @@ import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen
 import 'package:next_fi/features/seed_phrases/presentation/screens/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_settings/presentation/viewmodels/wallet_settings_vm.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/core/widgets/modal/wallet_switch_result.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -150,11 +151,8 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
     final colors = AppColor.of(context);
     final ctrl = TextEditingController(text: vm.state.walletName);
 
-    final newName = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: AppColor.of(context).surface,
+    final newName = await showAppModalBottomSheet<String>(
+      context,
       builder: (ctx) => _RenameBottomSheet(controller: ctrl, colors: colors),
     );
 
@@ -209,6 +207,19 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
       await ref.read(seedKeypairProvider).refresh();
       await ref.read(walletHomeVmProvider).boot();
       await vm.refresh();
+      return;
+    }
+
+    if (res.switchedInSheet) {
+      await ref.read(seedKeypairProvider).refresh();
+      await ref.read(walletHomeVmProvider).boot();
+      await vm.refresh();
+      if (!context.mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: "Switched active wallet",
+        type: SnackBarType.success,
+      );
       return;
     }
 
@@ -622,123 +633,95 @@ class _RenameBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [colors.surface, colors.surface.withValues(alpha: 0.98)],
-        ),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(
-          color: colors.border.withValues(alpha: 0.15),
-          width: 1.5,
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colors.border.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
+    return AppModalBase(
+      backgroundColor: colors.surface,
+      maxHeightFactor: 0.45,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Rename Wallet',
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 32,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+            ),
+            decoration: InputDecoration(
+              counterText: "",
+              hintText: "Enter wallet name",
+              hintStyle: TextStyle(
+                color: colors.textSecondary.withValues(alpha: 0.5),
+              ),
+              filled: true,
+              fillColor: colors.background.withValues(alpha: 0.6),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: colors.border.withValues(alpha: 0.25),
+                  width: 1.5,
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Rename Wallet',
-              style: TextStyle(
-                color: colors.textPrimary,
-                fontWeight: FontWeight.w800,
-                fontSize: 20,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLength: 32,
-              style: TextStyle(
-                color: colors.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
-              decoration: InputDecoration(
-                counterText: "",
-                hintText: "Enter wallet name",
-                hintStyle: TextStyle(
-                  color: colors.textSecondary.withValues(alpha: 0.5),
-                ),
-                filled: true,
-                fillColor: colors.background.withValues(alpha: 0.6),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: colors.border.withValues(alpha: 0.25),
-                    width: 1.5,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: colors.border.withValues(alpha: 0.25),
-                    width: 1.5,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: colors.primary, width: 2),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: colors.border.withValues(alpha: 0.25),
+                  width: 1.5,
                 ),
               ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: colors.primary, width: 2),
+              ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _SheetButton(
-                    icon: LucideIcons.x,
-                    label: 'Cancel',
-                    onPressed: () => Navigator.pop(context),
-                    colors: colors,
-                  ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _SheetButton(
+                  icon: LucideIcons.x,
+                  label: 'Cancel',
+                  onPressed: () => Navigator.pop(context),
+                  colors: colors,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _SheetButton(
-                    icon: LucideIcons.check,
-                    label: 'Save',
-                    onPressed: () {
-                      final raw = controller.text.trim();
-                      if (raw.isEmpty || raw.length > 32) {
-                        return;
-                      }
-                      Navigator.pop(context, raw);
-                    },
-                    colors: colors,
-                    isPrimary: true,
-                  ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SheetButton(
+                  icon: LucideIcons.check,
+                  label: 'Save',
+                  onPressed: () {
+                    final raw = controller.text.trim();
+                    if (raw.isEmpty || raw.length > 32) {
+                      return;
+                    }
+                    Navigator.pop(context, raw);
+                  },
+                  colors: colors,
+                  isPrimary: true,
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

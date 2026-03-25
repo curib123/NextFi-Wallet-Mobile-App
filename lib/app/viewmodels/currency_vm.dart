@@ -1713,6 +1713,7 @@ class CurrencyVM extends ChangeNotifier {
     return diffPct <= _maxSingleSourceJumpPct;
   }
 
+  // ignore: unused_element
   Future<double?> _usdToFiat(String fiat) async {
     final tgt = fiat.toUpperCase();
     if (tgt == 'USD') return 1.0;
@@ -1892,6 +1893,7 @@ class CurrencyVM extends ChangeNotifier {
     return (v is num && v.isFinite && v > 0) ? v.toDouble() : null;
   }
 
+  // ignore: unused_element
   Future<List<double>?> _fetchXlmUsdcDailyAllFromCex() async {
     return _firstNonNull<List<double>>([
       _cexBinanceDailyAll,
@@ -2015,6 +2017,7 @@ class CurrencyVM extends ChangeNotifier {
     return closes.isEmpty ? null : closes;
   }
 
+  // ignore: unused_element
   Future<List<double>?> _fetchXlmUsdcDailyFromCex() async {
     return _firstNonNull<List<double>>([
       _cexBinanceDailyRecent,
@@ -2112,6 +2115,7 @@ class CurrencyVM extends ChangeNotifier {
     return closes.isEmpty ? null : closes;
   }
 
+  // ignore: unused_element
   Future<List<double>?> _fetchXlmUsdcDailyAllFromDex() async {
     final issuer = _stellar.usdcIssuer;
     final now = DateTime.now().toUtc();
@@ -2151,6 +2155,7 @@ class CurrencyVM extends ChangeNotifier {
     return closes.isEmpty ? null : closes;
   }
 
+  // ignore: unused_element
   Future<List<double>?> _fetchXlmUsdcDailyFromDex() async {
     final issuer = _stellar.usdcIssuer;
     final now = DateTime.now().toUtc();

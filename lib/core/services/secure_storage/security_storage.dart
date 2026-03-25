@@ -72,6 +72,7 @@ class SecurityStorage {
   static const String _kAttempts = 'pin_failed_attempts';
   static const String _kLockoutUntil = 'pin_lockout_until';
   static const String _kBioEnabled = 'biometrics_enabled';
+  static const String _kAuthGateEnabled = 'auth_gate_enabled_v1';
 
   static const int minPinLen = 6;
   static const int maxPinLen = 6;
@@ -281,6 +282,35 @@ class SecurityStorage {
           iOptions: _iOpts,
         )) ==
         '1';
+  }
+
+  static Future<void> setAuthGateEnabled(bool enabled) async {
+    await _storage.write(
+      key: _kAuthGateEnabled,
+      value: enabled ? '1' : '0',
+      aOptions: _aOpts,
+      iOptions: _iOpts,
+    );
+  }
+
+  static Future<bool> isAuthGateEnabled() async {
+    final stored = await _storage.read(
+      key: _kAuthGateEnabled,
+      aOptions: _aOpts,
+      iOptions: _iOpts,
+    );
+    if (stored == null || stored.isEmpty) {
+      return true;
+    }
+    return stored == '1';
+  }
+
+  static Future<bool> shouldRequireAuthGate() async {
+    final hasStoredPin = await hasPin();
+    if (!hasStoredPin) {
+      return false;
+    }
+    return isAuthGateEnabled();
   }
 
   static Future<bool> migrateLegacyPlaintextPin({

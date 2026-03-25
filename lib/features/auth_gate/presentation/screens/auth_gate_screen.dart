@@ -23,6 +23,8 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   Timer? _smallVisualDelay;
   String? _lastLoggedCoverUrl;
   bool? _lastLoggedHasCover;
+  bool _completingFlow = false;
+  bool _submittingPin = false;
 
   late final AnimationController _bgCtrl = AnimationController(
     vsync: this,
@@ -97,6 +99,8 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   }
 
   void _onSuccessNavigate() {
+    if (_completingFlow) return;
+    _completingFlow = true;
     _smallVisualDelay?.cancel();
     _smallVisualDelay = Timer(const Duration(milliseconds: 200), () {
       if (!mounted) return;
@@ -135,47 +139,53 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   }
 
   Future<void> _submit() async {
+    if (_submittingPin || _completingFlow) return;
+    _submittingPin = true;
     final controller = ref.read(authGateControllerProvider.notifier);
-    final res = await controller.submitCurrentPin();
-    if (!mounted) return;
+    try {
+      final res = await controller.submitCurrentPin();
+      if (!mounted) return;
 
-    if (res.message != null) {
-      showFloatingSnackBar(
-        context,
-        message: res.message!,
-        type: switch (res.status) {
-          PinStatus.saved || PinStatus.verified => SnackBarType.success,
-          PinStatus.needFirstConfirm => SnackBarType.info,
-          PinStatus.mismatch ||
-          PinStatus.invalid ||
-          PinStatus.storageError ||
-          PinStatus.error => SnackBarType.error,
-          PinStatus.lockedOut => SnackBarType.warning,
-        },
-      );
-    }
+      if (res.message != null) {
+        showFloatingSnackBar(
+          context,
+          message: res.message!,
+          type: switch (res.status) {
+            PinStatus.saved || PinStatus.verified => SnackBarType.success,
+            PinStatus.needFirstConfirm => SnackBarType.info,
+            PinStatus.mismatch ||
+            PinStatus.invalid ||
+            PinStatus.storageError ||
+            PinStatus.error => SnackBarType.error,
+            PinStatus.lockedOut => SnackBarType.warning,
+          },
+        );
+      }
 
-    switch (res.status) {
-      case PinStatus.needFirstConfirm:
-        controller.clearCurrentPin();
-        break;
-      case PinStatus.mismatch:
-      case PinStatus.invalid:
-      case PinStatus.storageError:
-      case PinStatus.error:
-        _playShakeAnimation();
-        HapticFeedback.heavyImpact();
-        await Future.delayed(const Duration(milliseconds: 300));
-        if (mounted) controller.clearCurrentPin();
-        break;
-      case PinStatus.lockedOut:
-        controller.clearCurrentPin();
-        break;
-      case PinStatus.saved:
-      case PinStatus.verified:
-        controller.clearCurrentPin();
-        _onSuccessNavigate();
-        break;
+      switch (res.status) {
+        case PinStatus.needFirstConfirm:
+          controller.clearCurrentPin();
+          break;
+        case PinStatus.mismatch:
+        case PinStatus.invalid:
+        case PinStatus.storageError:
+        case PinStatus.error:
+          _playShakeAnimation();
+          HapticFeedback.heavyImpact();
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted) controller.clearCurrentPin();
+          break;
+        case PinStatus.lockedOut:
+          controller.clearCurrentPin();
+          break;
+        case PinStatus.saved:
+        case PinStatus.verified:
+          controller.clearCurrentPin();
+          _onSuccessNavigate();
+          break;
+      }
+    } finally {
+      _submittingPin = false;
     }
   }
 

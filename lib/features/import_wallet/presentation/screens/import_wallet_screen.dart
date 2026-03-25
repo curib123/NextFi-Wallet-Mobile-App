@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/features/import_wallet/presentation/viewmodels/import_wallet_state.dart';
 import 'package:next_fi/features/import_wallet/presentation/widgets/warning_box.dart';
 import 'package:next_fi/features/import_wallet/presentation/widgets/word_badge.dart';
@@ -117,10 +118,8 @@ class _ImportWalletScreenState extends ConsumerState<ImportWalletScreen>
     bool ackPrivate = false;
     bool ackCorrect = false;
 
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: colors.surface,
+    final ok = await showAppModalBottomSheet<bool>(
+      context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) {
           final ready = ackPrivate && ackCorrect;
@@ -855,127 +854,94 @@ class _SecurityChecklistSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [colors.surface, colors.surface.withValues(alpha: 0.98)],
-          ),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border.all(
-            color: colors.border.withValues(alpha: 0.15),
-            width: 1.5,
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 16,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    return AppModalBase(
+      backgroundColor: colors.surface,
+      maxHeightFactor: 0.55,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
             children: [
               Container(
-                width: 40,
-                height: 4,
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                     colors: [
-                      colors.border.withValues(alpha: 0.5),
-                      colors.border.withValues(alpha: 0.3),
+                      colors.warning.withValues(alpha: 0.15),
+                      colors.warning.withValues(alpha: 0.08),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: colors.warning.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(
+                  LucideIcons.shieldCheck,
+                  color: colors.warning,
+                  size: 20,
                 ),
               ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          colors.warning.withValues(alpha: 0.15),
-                          colors.warning.withValues(alpha: 0.08),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: colors.warning.withValues(alpha: 0.3),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Icon(
-                      LucideIcons.shieldCheck,
-                      color: colors.warning,
-                      size: 20,
-                    ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "Security Checklist",
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    letterSpacing: -0.3,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      "Security Checklist",
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ),
-                  WordBadge(count: state.wordCount),
-                ],
+                ),
               ),
-              const SizedBox(height: 20),
-              ConfirmTile(
-                title: "I'm in a private place and trust this device.",
-                icon: LucideIcons.eyeOff,
-                value: ackPrivate,
-                onChanged: onPrivateToggle,
-                accent: colors.primary,
+              WordBadge(count: state.wordCount),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ConfirmTile(
+            title: "I'm in a private place and trust this device.",
+            icon: LucideIcons.eyeOff,
+            value: ackPrivate,
+            onChanged: onPrivateToggle,
+            accent: colors.primary,
+          ),
+          const SizedBox(height: 12),
+          ConfirmTile(
+            title: "The phrase is complete, in order, and typed correctly.",
+            icon: LucideIcons.checkSquare,
+            value: ackCorrect,
+            onChanged: onCorrectToggle,
+            accent: colors.success,
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _SheetButton(
+                  icon: LucideIcons.x,
+                  label: 'Cancel',
+                  onPressed: onCancel,
+                  colors: colors,
+                ),
               ),
-              const SizedBox(height: 12),
-              ConfirmTile(
-                title: "The phrase is complete, in order, and typed correctly.",
-                icon: LucideIcons.checkSquare,
-                value: ackCorrect,
-                onChanged: onCorrectToggle,
-                accent: colors.success,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: _SheetButton(
-                      icon: LucideIcons.x,
-                      label: 'Cancel',
-                      onPressed: onCancel,
-                      colors: colors,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SheetButton(
-                      icon: LucideIcons.check,
-                      label: 'Confirm & Import',
-                      onPressed: confirmEnabled ? onConfirm : () {},
-                      colors: colors,
-                      isPrimary: true,
-                      enabled: confirmEnabled,
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: _SheetButton(
+                  icon: LucideIcons.check,
+                  label: 'Confirm & Import',
+                  onPressed: confirmEnabled ? onConfirm : () {},
+                  colors: colors,
+                  isPrimary: true,
+                  enabled: confirmEnabled,
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }

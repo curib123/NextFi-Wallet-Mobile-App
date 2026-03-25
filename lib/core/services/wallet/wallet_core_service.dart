@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 import 'package:next_fi/core/services/wallet/api/wallet_service.dart';
 import 'package:next_fi/core/services/wallet/helpers/wallet_exceptions.dart';
@@ -111,7 +112,7 @@ class WalletCoreService {
 
   void _handleAuthError(ApiException e) {
     if (e.statusCode == 401) {
-      print('[WalletCoreService] Unauthorized token');
+      debugPrint('[WalletCoreService] Unauthorized token');
     }
   }
 

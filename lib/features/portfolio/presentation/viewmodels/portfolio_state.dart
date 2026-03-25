@@ -30,12 +30,14 @@ class PortfolioState {
       (activeWalletAddress ?? '').trim().isNotEmpty;
 
   bool get hasData => data != null;
-  bool get isEmpty => !loading && data?.summary == null && !(isZeroBalance);
+  bool get isEmpty => !loading && !hasData && (error?.trim().isEmpty ?? true);
   bool get isZeroBalance =>
       !loading &&
+      hasData &&
       (data?.summary?.totalValue ?? 0) <= 0 &&
       (data?.allocation.isEmpty ?? true);
-  bool get hasInsufficientData => !loading && (data?.chart.length ?? 0) == 1;
+  bool get hasInsufficientData =>
+      !loading && (!hasData || (data?.chart.length ?? 0) <= 1);
   bool get isOffline => error?.toLowerCase().contains('socket') == true;
 
   PortfolioState copyWith({

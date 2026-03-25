@@ -51,6 +51,10 @@ class _InactivityGuardState extends ConsumerState<InactivityGuard>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (!_shell.authGateEnabled || !_shell.hasPin) {
+        _scheduleIdleTimer(widget.idleTimeout);
+        return;
+      }
       final Duration idleFor = DateTime.now().difference(_lastActivityAt);
       if (_shouldProtectSession && idleFor >= widget.idleTimeout) {
         _lockSession();
@@ -64,6 +68,9 @@ class _InactivityGuardState extends ConsumerState<InactivityGuard>
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _idleTimer?.cancel();
+      if (_shouldProtectSession) {
+        _lockSession(showSnackBar: false);
+      }
     }
   }
 
@@ -74,6 +81,8 @@ class _InactivityGuardState extends ConsumerState<InactivityGuard>
         !_shell.loading &&
         !_shell.showSplash &&
         !_shell.showOnboarding &&
+        _shell.hasPin &&
+        _shell.authGateEnabled &&
         _shell.isAuthenticated;
   }
 
@@ -94,31 +103,36 @@ class _InactivityGuardState extends ConsumerState<InactivityGuard>
     _idleTimer = Timer(safeDuration, _lockSession);
   }
 
-  void _lockSession() {
+  void _lockSession({bool showSnackBar = true}) {
     if (!mounted || !_shouldProtectSession || _hasLockedSession) return;
 
     _hasLockedSession = true;
     _idleTimer?.cancel();
     ref.read(appShellProvider.notifier).setAuthenticated(false);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showFloatingSnackBar(
-        context,
-        message: 'Session locked due to inactivity.',
-        type: SnackBarType.warning,
-      );
-    });
+    if (showSnackBar) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showFloatingSnackBar(
+          context,
+          message: 'Session locked due to inactivity.',
+          type: SnackBarType.warning,
+        );
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen<AppShellState>(appShellProvider, (prev, next) {
-      if (next.isAuthenticated) {
+      if (next.isAuthenticated && next.authGateEnabled && next.hasPin) {
         _lastActivityAt = DateTime.now();
         _hasLockedSession = false;
         _scheduleIdleTimer(widget.idleTimeout);
       } else {
+        if (!next.authGateEnabled || !next.hasPin) {
+          _hasLockedSession = false;
+        }
         _idleTimer?.cancel();
       }
     });

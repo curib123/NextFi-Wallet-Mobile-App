@@ -8,6 +8,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/modal/show_fiat_picker_bottom_sheet.dart';
 import 'package:next_fi/core/widgets/modal/show_pin_change_bottom_sheet.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
@@ -16,6 +17,8 @@ import 'package:next_fi/features/settings/data/models/settings_model.dart';
 import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_settings_screen.dart';
 
 typedef ThemeApplier = FutureOr<void> Function(ThemeMode mode);
+typedef AuthGateSetter = void Function(bool enabled);
+typedef SecurityStateRefresher = Future<void> Function();
 
 class ThemeBridge {
   static ThemeApplier? apply;
@@ -28,9 +31,11 @@ class ThemeStyleBridge {
 }
 
 class SettingsVM extends ChangeNotifier {
-  SettingsVM();
+  SettingsVM({this.onAuthGateChanged, this.onSecurityStateRefresh});
 
   final LocalAuthentication _localAuth = LocalAuthentication();
+  final AuthGateSetter? onAuthGateChanged;
+  final SecurityStateRefresher? onSecurityStateRefresh;
 
   static const String _kThemePrefKey = 'pref.theme_mode.v1';
   static const String _kThemeStylePrefKey = 'pref.theme_style_index.v1';
@@ -41,8 +46,10 @@ class SettingsVM extends ChangeNotifier {
 
   bool _bioSupported = false;
   bool _bioEnabled = false;
+  bool _authGateEnabled = true;
   bool get biometricsSupported => _bioSupported;
   bool get biometricsEnabled => _bioEnabled;
+  bool get authGateEnabled => _authGateEnabled;
 
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
@@ -58,6 +65,7 @@ class SettingsVM extends ChangeNotifier {
 
     await Future.wait([
       _loadBiometricState(),
+      _loadAuthGateState(),
       _loadThemeMode(),
       _loadThemeStyle(),
     ]);
@@ -82,6 +90,12 @@ class SettingsVM extends ChangeNotifier {
             subtitle: 'Change or set your 6-digit PIN',
             icon: LucideIcons.shield,
             action: SettingAction.changePin,
+          ),
+          const SettingItem(
+            title: 'App lock',
+            subtitle: 'Require PIN or biometrics when reopening the app',
+            icon: LucideIcons.lock,
+            action: SettingAction.authGate,
           ),
           SettingItem(
             title: 'Biometric unlock',
@@ -111,6 +125,7 @@ class SettingsVM extends ChangeNotifier {
       ),
     ];
 
+    _syncAppearanceSubtitle();
     notifyListeners();
   }
 
@@ -181,6 +196,13 @@ class SettingsVM extends ChangeNotifier {
   void _syncAppearanceSubtitle() {
     _sections = _sections.map((section) {
       final items = section.items.map((item) {
+        if (item.action == SettingAction.authGate) {
+          return item.copyWith(
+            subtitle: _authGateEnabled
+                ? 'PIN or biometrics required on reopen'
+                : 'Open directly without wallet lock',
+          );
+        }
         if (item.action == SettingAction.biometrics) {
           return item.copyWith(
             subtitle: _subtitleForBiometric(),
@@ -239,6 +261,45 @@ class SettingsVM extends ChangeNotifier {
 
     _bioSupported = supported;
     _bioEnabled = enabled;
+  }
+
+  Future<void> _loadAuthGateState() async {
+    try {
+      _authGateEnabled = await SecurityStorage.isAuthGateEnabled();
+    } catch (_) {
+      _authGateEnabled = true;
+    }
+  }
+
+  Future<void> onToggleAuthGate(BuildContext context, bool value) async {
+    HapticFeedback.selectionClick();
+
+    if (value) {
+      var hasPin = await SecurityStorage.hasPin();
+      if (!context.mounted) return;
+      if (!hasPin) {
+        await showPinChangeBottomSheet(context);
+        hasPin = await SecurityStorage.hasPin();
+        if (!context.mounted) return;
+      }
+      if (!hasPin) {
+        _showSnack(context, 'Create a PIN first to enable app lock.');
+        await _loadAuthGateState();
+        _syncAppearanceSubtitle();
+        notifyListeners();
+        return;
+      }
+    }
+
+    await SecurityStorage.setAuthGateEnabled(value);
+    _authGateEnabled = value;
+    _syncAppearanceSubtitle();
+    notifyListeners();
+    onAuthGateChanged?.call(value);
+    await onSecurityStateRefresh?.call();
+
+    if (!context.mounted) return;
+    _showSnack(context, value ? 'App lock enabled.' : 'App lock disabled.');
   }
 
   Future<void> onToggleBiometrics(BuildContext context, bool value) async {
@@ -312,6 +373,13 @@ class SettingsVM extends ChangeNotifier {
         break;
       case SettingAction.changePin:
         await showPinChangeBottomSheet(context);
+        await _loadBiometricState();
+        await _loadAuthGateState();
+        _syncAppearanceSubtitle();
+        notifyListeners();
+        await onSecurityStateRefresh?.call();
+        break;
+      case SettingAction.authGate:
         break;
       case SettingAction.fiatCurrency:
         await showFiatPickerBottomSheet(context);
@@ -325,11 +393,8 @@ class SettingsVM extends ChangeNotifier {
   }
 
   Future<void> showAppearanceSheet(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    await showAppModalBottomSheet<void>(
+      context,
       builder: (sheetContext) {
         final colors = AppColor.of(sheetContext);
         final textTheme = Theme.of(sheetContext).textTheme;
@@ -413,169 +478,143 @@ class SettingsVM extends ChangeNotifier {
           );
         }
 
-        final mediaQuery = MediaQuery.of(sheetContext);
-        final maxHeight = mediaQuery.size.height * 0.88;
+        return AppModalBase(
+          backgroundColor: colors.surface,
+          maxHeightFactor: 0.75,
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Appearance',
+                  style: textTheme.titleLarge?.copyWith(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Theme controls live here only, with blue accent variants tuned for clear contrast and consistent branding.',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Theme mode',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                modeCard(
+                  ThemeMode.system,
+                  LucideIcons.smartphone,
+                  'System',
+                  'Follow the device appearance.',
+                ),
+                const SizedBox(height: 10),
+                modeCard(
+                  ThemeMode.light,
+                  LucideIcons.sun,
+                  'Light',
+                  'Bright surfaces with strong text contrast.',
+                ),
+                const SizedBox(height: 10),
+                modeCard(
+                  ThemeMode.dark,
+                  LucideIcons.moon,
+                  'Dark',
+                  'Low-glare surfaces with readable text.',
+                ),
+                const SizedBox(height: 22),
+                Text(
+                  'Blue theme',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: AppColor.themeStyleCount,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 2.15,
+                  ),
+                  itemBuilder: (gridContext, index) {
+                    final normalized = AppColor.normalizeThemeStyleIndex(index);
+                    final selected =
+                        normalized ==
+                        AppColor.normalizeThemeStyleIndex(selectedStyle);
+                    final preview = AppColor.themeStylePreview(
+                      index,
+                      Theme.of(sheetContext).brightness,
+                    );
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colors.surface,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: colors.border),
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () async {
+                        Navigator.of(sheetContext).pop();
+                        await setThemeStyle(context, index);
+                      },
+                      child: Ink(
                         decoration: BoxDecoration(
-                          color: colors.border,
-                          borderRadius: BorderRadius.circular(999),
+                          color: selected
+                              ? colors.surfaceRaised
+                              : colors.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: selected ? preview : colors.border,
+                            width: selected ? 1.4 : 1,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: preview,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  AppColor.themeStyleLabel(normalized),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.titleSmall?.copyWith(
+                                    color: colors.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (selected)
+                                Icon(
+                                  Icons.check_rounded,
+                                  size: 18,
+                                  color: preview,
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Appearance',
-                      style: textTheme.titleLarge?.copyWith(
-                        color: colors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Theme controls live here only, with blue accent variants tuned for clear contrast and consistent branding.',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Theme mode',
-                      style: textTheme.labelLarge?.copyWith(
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    modeCard(
-                      ThemeMode.system,
-                      LucideIcons.smartphone,
-                      'System',
-                      'Follow the device appearance.',
-                    ),
-                    const SizedBox(height: 10),
-                    modeCard(
-                      ThemeMode.light,
-                      LucideIcons.sun,
-                      'Light',
-                      'Bright surfaces with strong text contrast.',
-                    ),
-                    const SizedBox(height: 10),
-                    modeCard(
-                      ThemeMode.dark,
-                      LucideIcons.moon,
-                      'Dark',
-                      'Low-glare surfaces with readable text.',
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      'Blue theme',
-                      style: textTheme.labelLarge?.copyWith(
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: AppColor.themeStyleCount,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                            childAspectRatio: 2.15,
-                          ),
-                      itemBuilder: (gridContext, index) {
-                        final normalized = AppColor.normalizeThemeStyleIndex(
-                          index,
-                        );
-                        final selected =
-                            normalized ==
-                            AppColor.normalizeThemeStyleIndex(selectedStyle);
-                        final preview = AppColor.themeStylePreview(
-                          index,
-                          Theme.of(sheetContext).brightness,
-                        );
-
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: () async {
-                            Navigator.of(sheetContext).pop();
-                            await setThemeStyle(context, index);
-                          },
-                          child: Ink(
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? colors.surfaceRaised
-                                  : colors.surface,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: selected ? preview : colors.border,
-                                width: selected ? 1.4 : 1,
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 16,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: preview,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      AppColor.themeStyleLabel(normalized),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: textTheme.titleSmall?.copyWith(
-                                        color: colors.textPrimary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  if (selected)
-                                    Icon(
-                                      Icons.check_rounded,
-                                      size: 18,
-                                      color: preview,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                    );
+                  },
                 ),
-              ),
+              ],
             ),
           ),
         );

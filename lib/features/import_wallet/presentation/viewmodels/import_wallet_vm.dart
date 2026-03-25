@@ -10,6 +10,8 @@ class ImportWalletVM extends ChangeNotifier {
   ImportWalletState get state => _state;
 
   bool _disposed = false;
+  Future<bool>? _saveImportedFuture;
+  String? _lastImportedAddress;
 
   void _set(ImportWalletState s) {
     _state = s;
@@ -21,6 +23,7 @@ class ImportWalletVM extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
+
   String _sanitized(String text) =>
       text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
@@ -52,6 +55,23 @@ class ImportWalletVM extends ChangeNotifier {
   }
 
   Future<bool> saveImported() async {
+    final pending = _saveImportedFuture;
+    if (pending != null) {
+      return pending;
+    }
+
+    final future = _runSaveImported();
+    _saveImportedFuture = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_saveImportedFuture, future)) {
+        _saveImportedFuture = null;
+      }
+    }
+  }
+
+  Future<bool> _runSaveImported() async {
     try {
       _set(_state.copyWith(importing: true, error: ''));
       final phrase = sanitizedPhrase;
@@ -74,6 +94,10 @@ class ImportWalletVM extends ChangeNotifier {
       );
       if (existingWalletId != null) {
         await SeedStorage.setActiveWallet(existingWalletId);
+        if (_lastImportedAddress == publicAddress) {
+          _set(_state.copyWith(importing: false, error: ''));
+          return true;
+        }
         _set(
           _state.copyWith(
             importing: false,
@@ -110,6 +134,7 @@ class ImportWalletVM extends ChangeNotifier {
         );
       } catch (_) {}
 
+      _lastImportedAddress = publicAddress;
       _set(_state.copyWith(importing: false));
       return true;
     } catch (e) {

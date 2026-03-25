@@ -21,6 +21,7 @@ import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 import 'package:next_fi/core/services/assets/asset_catalog_service.dart';
+import 'package:next_fi/core/services/secure_storage/security_storage.dart';
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/core/services/wallet_sync/wallet_sync_service.dart';
@@ -40,6 +41,8 @@ class AppShellState {
     this.hasMnemonic = false,
     this.isAuthenticated = false,
     this.showOnboarding = false,
+    this.hasPin = false,
+    this.authGateEnabled = true,
   });
 
   final bool showSplash;
@@ -47,6 +50,8 @@ class AppShellState {
   final bool hasMnemonic;
   final bool isAuthenticated;
   final bool showOnboarding;
+  final bool hasPin;
+  final bool authGateEnabled;
 
   AppShellState copyWith({
     bool? showSplash,
@@ -54,6 +59,8 @@ class AppShellState {
     bool? hasMnemonic,
     bool? isAuthenticated,
     bool? showOnboarding,
+    bool? hasPin,
+    bool? authGateEnabled,
   }) {
     return AppShellState(
       showSplash: showSplash ?? this.showSplash,
@@ -61,6 +68,8 @@ class AppShellState {
       hasMnemonic: hasMnemonic ?? this.hasMnemonic,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       showOnboarding: showOnboarding ?? this.showOnboarding,
+      hasPin: hasPin ?? this.hasPin,
+      authGateEnabled: authGateEnabled ?? this.authGateEnabled,
     );
   }
 }
@@ -84,14 +93,23 @@ class AppShellController extends Notifier<AppShellState> {
     final storedMnemonic = await SeedStorage.getSeed();
     final onboardingSeen =
         await _appSecureStorage.read(key: _kOnboardingSeenKey) == '1';
+    final hasPin = await SecurityStorage.hasPin();
+    final authGateEnabled = await SecurityStorage.isAuthGateEnabled();
+    final requiresAuth =
+        storedMnemonic != null &&
+        storedMnemonic.isNotEmpty &&
+        hasPin &&
+        authGateEnabled;
 
     if (!ref.mounted) return;
     if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
       state = state.copyWith(
         hasMnemonic: true,
-        isAuthenticated: true,
+        isAuthenticated: !requiresAuth,
         showOnboarding: false,
         loading: false,
+        hasPin: hasPin,
+        authGateEnabled: authGateEnabled,
       );
       return;
     }
@@ -100,6 +118,9 @@ class AppShellController extends Notifier<AppShellState> {
       hasMnemonic: false,
       showOnboarding: !onboardingSeen,
       loading: false,
+      hasPin: hasPin,
+      authGateEnabled: authGateEnabled,
+      isAuthenticated: false,
     );
   }
 
@@ -113,6 +134,22 @@ class AppShellController extends Notifier<AppShellState> {
     state = state.copyWith(isAuthenticated: value);
   }
 
+  Future<void> refreshSecurityState() async {
+    final hasPin = await SecurityStorage.hasPin();
+    final authGateEnabled = await SecurityStorage.isAuthGateEnabled();
+    if (!ref.mounted) return;
+    state = state.copyWith(hasPin: hasPin, authGateEnabled: authGateEnabled);
+  }
+
+  void setAuthGateEnabled(bool value) {
+    final shouldAutoUnlock =
+        !value && state.hasMnemonic && !state.loading && !state.showSplash;
+    state = state.copyWith(
+      authGateEnabled: value,
+      isAuthenticated: shouldAutoUnlock ? true : null,
+    );
+  }
+
   void completeWalletSetup({bool authenticated = true}) {
     state = state.copyWith(
       showSplash: false,
@@ -120,6 +157,7 @@ class AppShellController extends Notifier<AppShellState> {
       hasMnemonic: true,
       isAuthenticated: authenticated,
       showOnboarding: false,
+      hasPin: true,
     );
   }
 }
@@ -297,8 +335,7 @@ final walletHomeVmProvider = ChangeNotifierProvider<WalletHomeVM>((ref) {
     assetVM: assets,
     currencyVM: currency,
     walletSyncService: walletSync,
-  )
-    ..bindToAddress(seed.accountId);
+  )..bindToAddress(seed.accountId);
 
   void syncSeed() => vm.bindToAddress(seed.accountId);
 
@@ -348,7 +385,12 @@ final walletSettingsVmProvider = ChangeNotifierProvider<WalletSettingsVM>((
 });
 
 final settingsVmProvider = ChangeNotifierProvider<SettingsVM>((ref) {
-  final vm = SettingsVM();
+  final vm = SettingsVM(
+    onAuthGateChanged: ref.read(appShellProvider.notifier).setAuthGateEnabled,
+    onSecurityStateRefresh: ref
+        .read(appShellProvider.notifier)
+        .refreshSecurityState,
+  );
   unawaited(vm.initDefaults());
   return vm;
 });

@@ -27,10 +27,8 @@ class TopBar extends ConsumerWidget {
       child: Row(
         children: [
           Builder(
-            builder: (ctx) => AppDrawerButton(
-              colors: colors,
-              onTap: () => _openDrawer(ctx),
-            ),
+            builder: (ctx) =>
+                AppDrawerButton(colors: colors, onTap: () => _openDrawer(ctx)),
           ),
           const Spacer(),
           _WalletSwitcher(
@@ -94,6 +92,18 @@ class TopBar extends ConsumerWidget {
       );
       if (!context.mounted) return;
       await ref.read(walletHomeVmProvider).boot();
+      return;
+    }
+
+    if (res.switchedInSheet) {
+      await ref.read(seedKeypairProvider).refresh();
+      await ref.read(walletHomeVmProvider).boot();
+      if (!context.mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: 'Switched active wallet.',
+        type: SnackBarType.success,
+      );
       return;
     }
 
@@ -222,10 +232,7 @@ class _WalletSwitcher extends StatelessWidget {
 }
 
 class _SettingsActionButton extends StatelessWidget {
-  const _SettingsActionButton({
-    required this.colors,
-    required this.onTap,
-  });
+  const _SettingsActionButton({required this.colors, required this.onTap});
 
   final AppColor colors;
   final VoidCallback onTap;
@@ -242,11 +249,7 @@ class _SettingsActionButton extends StatelessWidget {
           shape: BoxShape.circle,
           color: colors.border.withValues(alpha: 0.08),
         ),
-        child: Icon(
-          LucideIcons.pieChart,
-          color: colors.textPrimary,
-          size: 20,
-        ),
+        child: Icon(LucideIcons.pieChart, color: colors.textPrimary, size: 20),
       ),
     );
   }
