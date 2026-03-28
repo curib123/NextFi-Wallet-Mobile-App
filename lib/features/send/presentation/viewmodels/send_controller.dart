@@ -117,6 +117,10 @@ class SendController extends Notifier<SendState> {
     await _recipientFlow?.setFederationInput(value);
   }
 
+  Future<void> setTypedRecipientInput(String value) async {
+    await _recipientFlow?.setTypedInput(value);
+  }
+
   Future<void> selectSavedRecipient(RecipientAddressModel? recipient) async {
     state = state.copyWith(prefillName: recipient?.name ?? state.prefillName);
     await _recipientFlow?.selectSavedRecipient(recipient);

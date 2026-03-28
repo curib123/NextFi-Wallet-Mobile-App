@@ -128,8 +128,7 @@ class SendScreen extends ConsumerStatefulWidget {
 }
 
 class _SendScreenState extends ConsumerState<SendScreen> {
-  final _publicAddressCtl = TextEditingController();
-  final _federationCtl = TextEditingController();
+  final _recipientCtl = TextEditingController();
   final _amtCtl = TextEditingController();
   final _memoCtl = TextEditingController();
 
@@ -139,6 +138,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
 
   bool _booted = false;
   bool _scannerOpenedOnce = false;
+  bool _syncingRecipientField = false;
 
   SendControllerArgs get _args => SendControllerArgs(
     address: widget.address,
@@ -163,11 +163,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             : RecipientInputParser.isFederationAddress(prefillAddress)
             ? RecipientInputMode.federation
             : RecipientInputMode.publicAddress);
-    if (initialMode == RecipientInputMode.publicAddress) {
-      _publicAddressCtl.text = prefillAddress;
-    }
-    if (initialMode == RecipientInputMode.federation) {
-      _federationCtl.text = prefillAddress;
+    if (initialMode == RecipientInputMode.publicAddress ||
+        initialMode == RecipientInputMode.federation) {
+      _recipientCtl.text = prefillAddress;
     }
 
     _amtCtl.addListener(() {
@@ -177,16 +175,11 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       setState(() {});
     });
 
-    _publicAddressCtl.addListener(() {
+    _recipientCtl.addListener(() {
+      if (_syncingRecipientField) return;
       ref
           .read(sendControllerProvider(_args).notifier)
-          .setManualPublicAddress(_publicAddressCtl.text);
-    });
-
-    _federationCtl.addListener(() {
-      ref
-          .read(sendControllerProvider(_args).notifier)
-          .setFederationInput(_federationCtl.text);
+          .setTypedRecipientInput(_recipientCtl.text);
     });
 
     _memoCtl.addListener(() {
@@ -198,8 +191,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     if (widget.autoOpenScanner && !_scannerOpenedOnce) {
       final hasPrefill =
           (widget.prefillAddress ?? '').trim().isNotEmpty ||
-          _publicAddressCtl.text.trim().isNotEmpty ||
-          _federationCtl.text.trim().isNotEmpty ||
+          _recipientCtl.text.trim().isNotEmpty ||
           widget.prefillRecipient != null;
       if (!hasPrefill) {
         _scannerOpenedOnce = true;
@@ -214,18 +206,39 @@ class _SendScreenState extends ConsumerState<SendScreen> {
 
   @override
   void dispose() {
-    _publicAddressCtl.dispose();
-    _federationCtl.dispose();
+    _recipientCtl.dispose();
     _amtCtl.dispose();
     _memoCtl.dispose();
     super.dispose();
   }
 
   void _applyFederationSuggestion(String value) {
-    _federationCtl.text = value;
-    _federationCtl.selection = TextSelection.fromPosition(
-      TextPosition(offset: _federationCtl.text.length),
+    _recipientCtl.text = value;
+    _recipientCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _recipientCtl.text.length),
     );
+  }
+
+  void _syncRecipientField(RecipientInputState recipient) {
+    final expectedText = switch (recipient.mode) {
+      RecipientInputMode.publicAddress => recipient.manualPublicAddress,
+      RecipientInputMode.federation => recipient.federationInput,
+      RecipientInputMode.savedRecipient || RecipientInputMode.scannedQr => '',
+    };
+    if (_recipientCtl.text == expectedText) return;
+    _syncingRecipientField = true;
+    _recipientCtl.value = TextEditingValue(
+      text: expectedText,
+      selection: TextSelection.collapsed(offset: expectedText.length),
+    );
+    _syncingRecipientField = false;
+  }
+
+  Future<void> _clearTypedRecipientInput() async {
+    _recipientCtl.clear();
+    await ref
+        .read(sendControllerProvider(_args).notifier)
+        .setTypedRecipientInput('');
   }
 
   Future<void> _refresh() async {
@@ -344,6 +357,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     final t = _ST.of(context);
     final vm = ref.watch(sendControllerProvider(_args));
     final tokenStr = vm.assetSymbol;
+    _syncRecipientField(vm.recipient);
 
     if (vm.loading) {
       return Scaffold(
@@ -371,23 +385,13 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                   onRefresh: _refresh,
                   color: c.primary,
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 28),
+                    padding: const EdgeInsets.fromLTRB(0, 6, 0, 28),
                     children: [
-                      _buildSectionIntro(
-                        c,
-                        title: 'Amount',
-                        subtitle: 'Enter the amount you want to transfer.',
-                        eyebrow: 'Payment',
-                      ),
+                      _buildSectionIntro(c, title: 'Amount'),
                       const SizedBox(height: 12),
                       _buildAmountCard(c, t, vm, tokenStr),
                       const SizedBox(height: 22),
-                      _buildSectionIntro(
-                        c,
-                        title: 'Recipient',
-                        subtitle: 'Choose how you want to deliver the funds.',
-                        eyebrow: 'Destination',
-                      ),
+                      _buildSectionIntro(c, title: 'Recipient'),
                       const SizedBox(height: 12),
                       _buildRecipientCard(c, t, vm),
                       if (!vm.isXlm) ...[
@@ -395,22 +399,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                         _buildTrustlineStatus(c, t, vm),
                       ],
                       const SizedBox(height: 22),
-                      _buildSectionIntro(
-                        c,
-                        title: 'Memo',
-                        subtitle: 'Optional context for the recipient.',
-                        eyebrow: 'Reference',
-                      ),
+                      _buildSectionIntro(c, title: 'Memo'),
                       const SizedBox(height: 12),
                       _buildMemoCard(c, t),
                       if (vm.typedAmount > 0) ...[
                         const SizedBox(height: 22),
-                        _buildSectionIntro(
-                          c,
-                          title: 'Review',
-                          subtitle: 'Double-check fees and remaining balance.',
-                          eyebrow: 'Summary',
-                        ),
+                        _buildSectionIntro(c, title: 'Review'),
                         const SizedBox(height: 12),
                         _buildBreakdownCard(c, t, vm, tokenStr),
                       ],
@@ -459,85 +453,56 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          FintechSurfaceCard(
+          FintechFullBleedSection(
             colors: c,
             emphasisColor: c.primary,
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: c.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: c.primary.withValues(alpha: 0.14),
-                          ),
-                        ),
-                        child: Text(
-                          'Digital transfer',
-                          style: TextStyle(
-                            color: c.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.35,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
                       Text(
                         'Send $tokenStr',
                         style: TextStyle(
                           color: c.textPrimary,
-                          fontSize: 26,
+                          fontSize: 24,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: -0.9,
+                          letterSpacing: -0.7,
                           height: 1.05,
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Fast, traceable wallet transfer with network fee review built in.',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          height: 1.45,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                      const SizedBox(height: 8),
+                      Row(
                         children: [
-                          _buildHeaderStatChip(
-                            c,
-                            icon: LucideIcons.wallet,
-                            label:
-                                'Available ${_fmtAmount(vm.senderBalanceToken, decimals: vm.isXlm ? 4 : 2)} $tokenStr',
+                          Icon(
+                            LucideIcons.wallet,
+                            size: 13,
+                            color: c.textSecondary,
                           ),
-                          _buildHeaderStatChip(
-                            c,
-                            icon: LucideIcons.zap,
-                            label:
-                                'Fee ${(vm.estNetworkFeeXlm ?? vm.networkFee).toStringAsFixed(7)} XLM',
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '${_fmtAmount(vm.senderBalanceToken, decimals: vm.isXlm ? 4 : 2)} $tokenStr available',
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
                 Container(
-                  width: 66,
-                  height: 66,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -553,7 +518,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                     ),
                   ),
                   alignment: Alignment.center,
-                  child: AssetLogo(keyOrSymbol: tokenStr, size: 34),
+                  child: AssetLogo(keyOrSymbol: tokenStr, size: 30),
                 ),
               ],
             ),
@@ -563,53 +528,15 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     );
   }
 
-  Widget _buildHeaderStatChip(
-    AppColor c, {
-    required IconData icon,
-    required String label,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: c.surface.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.border.withValues(alpha: 0.9)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: c.primary),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 11.8,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionIntro(
-    AppColor c, {
-    required String title,
-    required String subtitle,
-    required String eyebrow,
-  }) {
-    return FintechSectionIntro(
-      title: title,
-      subtitle: subtitle,
-      colors: c,
-      eyebrow: eyebrow,
+  Widget _buildSectionIntro(AppColor c, {required String title}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: FintechSectionIntro(title: title, colors: c),
     );
   }
 
   Widget _buildAmountCard(AppColor c, _ST t, SendState vm, String tokenStr) {
-    return FintechSurfaceCard(
+    return FintechFullBleedSection(
       colors: c,
       emphasisColor: c.primary,
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -766,7 +693,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         RecipientInputParser.isStellarPublicAddress(destination);
     final activeRecipient = recipient.activeRecipient;
 
-    return FintechSurfaceCard(
+    return FintechFullBleedSection(
       colors: c,
       emphasisColor: c.primary,
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -797,8 +724,6 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          _buildRecipientModeSelector(c, t, recipient),
-          const SizedBox(height: 14),
           if (recipient.mode == RecipientInputMode.savedRecipient)
             _buildSavedRecipientPanel(c, t, vm)
           else if (recipient.mode == RecipientInputMode.scannedQr)
@@ -810,7 +735,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               hasValidDestination,
             )
           else if (recipient.mode == RecipientInputMode.publicAddress)
-            _buildPublicAddressPanel(
+            _buildTypedRecipientPanel(
               c,
               t,
               vm,
@@ -818,7 +743,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               hasValidDestination,
             )
           else
-            _buildFederationPanel(
+            _buildTypedRecipientPanel(
               c,
               t,
               vm,
@@ -830,122 +755,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     );
   }
 
-  Widget _buildRecipientModeSelector(
-    AppColor c,
-    _ST t,
-    RecipientInputState recipient,
-  ) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _buildModeChip(
-          label: 'Saved',
-          icon: LucideIcons.contact2,
-          selected: recipient.mode == RecipientInputMode.savedRecipient,
-          backgroundColor: t.chipBg,
-          selectedBackgroundColor: t.primaryTint,
-          borderColor: t.chipBorder,
-          selectedBorderColor: c.primary,
-          textColor: c.textPrimary,
-          selectedTextColor: c.primary,
-          iconColor: t.labelColor,
-          selectedIconColor: c.primary,
-          onTap: () => ref
-              .read(sendControllerProvider(_args).notifier)
-              .setRecipientMode(RecipientInputMode.savedRecipient),
-        ),
-        _buildModeChip(
-          label: 'Scan',
-          icon: LucideIcons.qrCode,
-          selected: recipient.mode == RecipientInputMode.scannedQr,
-          backgroundColor: t.chipBg,
-          selectedBackgroundColor: t.primaryTint,
-          borderColor: t.chipBorder,
-          selectedBorderColor: c.primary,
-          textColor: c.textPrimary,
-          selectedTextColor: c.primary,
-          iconColor: t.labelColor,
-          selectedIconColor: c.primary,
-          onTap: () async {
-            await ref
-                .read(sendControllerProvider(_args).notifier)
-                .setRecipientMode(RecipientInputMode.scannedQr);
-            await _openScanner();
-          },
-        ),
-        _buildModeChip(
-          label: 'Address',
-          icon: LucideIcons.wallet,
-          selected: recipient.mode == RecipientInputMode.publicAddress,
-          backgroundColor: t.chipBg,
-          selectedBackgroundColor: t.primaryTint,
-          borderColor: t.chipBorder,
-          selectedBorderColor: c.primary,
-          textColor: c.textPrimary,
-          selectedTextColor: c.primary,
-          iconColor: t.labelColor,
-          selectedIconColor: c.primary,
-          onTap: () => ref
-              .read(sendControllerProvider(_args).notifier)
-              .setRecipientMode(RecipientInputMode.publicAddress),
-        ),
-        _buildModeChip(
-          label: 'Federation',
-          icon: LucideIcons.atSign,
-          selected: recipient.mode == RecipientInputMode.federation,
-          backgroundColor: t.chipBg,
-          selectedBackgroundColor: t.primaryTint,
-          borderColor: t.chipBorder,
-          selectedBorderColor: c.primary,
-          textColor: c.textPrimary,
-          selectedTextColor: c.primary,
-          iconColor: t.labelColor,
-          selectedIconColor: c.primary,
-          onTap: () => ref
-              .read(sendControllerProvider(_args).notifier)
-              .setRecipientMode(RecipientInputMode.federation),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildModeChip({
-    required String label,
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onTap,
-    required Color backgroundColor,
-    required Color selectedBackgroundColor,
-    required Color borderColor,
-    required Color selectedBorderColor,
-    required Color textColor,
-    required Color selectedTextColor,
-    required Color iconColor,
-    required Color selectedIconColor,
-  }) {
-    return RecipientModeChip(
-      label: label,
-      icon: icon,
-      selected: selected,
-      onTap: onTap,
-      backgroundColor: backgroundColor,
-      selectedBackgroundColor: selectedBackgroundColor,
-      borderColor: borderColor,
-      selectedBorderColor: selectedBorderColor,
-      textColor: textColor,
-      selectedTextColor: selectedTextColor,
-      iconColor: iconColor,
-      selectedIconColor: selectedIconColor,
-    );
-  }
-
   Widget _buildSavedRecipientPanel(AppColor c, _ST t, SendState vm) {
     final recipient = vm.recipient.savedRecipient;
     if (recipient == null) {
       return _buildSelectorEmptyState(
         title: 'Choose a saved recipient',
-        subtitle: 'Pick from your saved list to avoid retyping addresses.',
+        subtitle: 'Pick from saved contacts.',
         buttonLabel: 'Open recipient list',
         icon: LucideIcons.contact2,
         onTap: _openRecipientsPicker,
@@ -981,10 +796,20 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         const SizedBox(height: 10),
         Align(
           alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _openRecipientsPicker,
-            icon: const Icon(LucideIcons.repeat2, size: 16),
-            label: const Text('Replace recipient'),
+          child: Wrap(
+            spacing: 4,
+            children: [
+              TextButton.icon(
+                onPressed: _openRecipientsPicker,
+                icon: const Icon(LucideIcons.repeat2, size: 16),
+                label: const Text('Replace'),
+              ),
+              TextButton.icon(
+                onPressed: _clearTypedRecipientInput,
+                icon: const Icon(LucideIcons.pencil, size: 16),
+                label: const Text('Enter manually'),
+              ),
+            ],
           ),
         ),
       ],
@@ -1007,7 +832,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       children: [
         RecipientScannedValueCard(
           rawValue: scannedPayload.rawValue,
-          emptyMessage: 'Scan a Stellar address or federation QR code.',
+          emptyMessage: 'Scan an address or federation code.',
           backgroundColor: t.inputBg,
         ),
         const SizedBox(height: 10),
@@ -1025,7 +850,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               child: OutlinedButton.icon(
                 onPressed: () => ref
                     .read(sendControllerProvider(_args).notifier)
-                    .applyScannedValue(''),
+                    .setTypedRecipientInput(''),
                 icon: const Icon(LucideIcons.x, size: 16),
                 label: const Text('Clear'),
               ),
@@ -1089,74 +914,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     );
   }
 
-  Widget _buildPublicAddressPanel(
-    AppColor c,
-    _ST t,
-    SendState vm,
-    RecipientAddressModel? activeRecipient,
-    bool hasValidDestination,
-  ) {
-    final destination = vm.recipient.finalDestinationAddress;
-    final currentValue = _publicAddressCtl.text.trim();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildPublicAddressInput(c, t, currentValue),
-        if (isLoadingForRecipient(vm.recipient)) ...[
-          const SizedBox(height: 10),
-          RecipientLookupLoadingCard(
-            backgroundColor: t.inputBg,
-            borderColor: t.chipBorder,
-            spinnerColor: t.primaryMuted,
-            labelColor: t.labelColor,
-          ),
-        ] else if (hasValidDestination && activeRecipient != null) ...[
-          const SizedBox(height: 10),
-          _buildSavedRecipientCard(
-            c,
-            t,
-            name: activeRecipient.name,
-            address: activeRecipient.address,
-            colorValue: activeRecipient.color,
-            onEdit: () async {
-              final ok = await showRecipientUpsertSheet(
-                context,
-                initial: activeRecipient,
-              );
-              if (ok == true && mounted) {
-                await ref.read(contactListProvider.notifier).refresh();
-                await ref
-                    .read(sendControllerProvider(_args).notifier)
-                    .refreshRecipientState();
-              }
-            },
-          ),
-        ] else if (hasValidDestination && activeRecipient == null) ...[
-          const SizedBox(height: 10),
-          _buildNewRecipientCard(
-            c,
-            t,
-            address: destination!,
-            onAdd: () async {
-              final saved = await showRecipientUpsertSheet(
-                context,
-                address: destination,
-              );
-              if (saved == true && mounted) {
-                await ref.read(contactListProvider.notifier).refresh();
-                await ref
-                    .read(sendControllerProvider(_args).notifier)
-                    .refreshRecipientState();
-              }
-            },
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildFederationPanel(
+  Widget _buildTypedRecipientPanel(
     AppColor c,
     _ST t,
     SendState vm,
@@ -1165,17 +923,17 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   ) {
     final recipient = vm.recipient;
     final destination = recipient.finalDestinationAddress;
-    final currentValue = _federationCtl.text.trim();
+    final currentValue = _recipientCtl.text.trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildFederationInput(c, t, currentValue, recipient),
+        _buildRecipientInput(c, t, currentValue, recipient),
         if (recipient.federationSuggestions.isNotEmpty) ...[
           const SizedBox(height: 10),
           _buildFederationSuggestions(c, t, recipient),
         ],
-        if (currentValue.isNotEmpty) ...[
+        if (recipient.shouldShowFederationUi && currentValue.isNotEmpty) ...[
           const SizedBox(height: 10),
           _buildFederationStatus(c, t, vm),
         ],
@@ -1254,77 +1012,20 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     );
   }
 
-  Widget _buildPublicAddressInput(AppColor c, _ST t, String addr) {
-    return Container(
-      decoration: BoxDecoration(
-        color: t.inputBg,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: TextField(
-        controller: _publicAddressCtl,
-        textInputAction: TextInputAction.next,
-        keyboardType: TextInputType.multiline,
-        minLines: 1,
-        maxLines: null,
-        style: TextStyle(
-          fontSize: 15.5,
-          fontWeight: FontWeight.w500,
-          color: c.textPrimary,
-          letterSpacing: -0.2,
-          fontFeatures: const [ui.FontFeature.tabularFigures()],
-        ),
-        decoration: InputDecoration(
-          hintText: 'Paste a Stellar public address (G...)',
-          hintMaxLines: 1,
-          hintStyle: TextStyle(
-            color: t.metaColor,
-            fontSize: 14,
-            letterSpacing: -0.2,
-          ),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 15, right: 10),
-            child: Icon(LucideIcons.wallet, color: t.labelColor, size: 17),
-          ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 0),
-          suffixIcon: addr.isNotEmpty
-              ? Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: IconButton(
-                    onPressed: () {
-                      _publicAddressCtl.clear();
-                      ref
-                          .read(sendControllerProvider(_args).notifier)
-                          .setManualPublicAddress('');
-                    },
-                    icon: Icon(LucideIcons.x, size: 16, color: t.labelColor),
-                    splashRadius: 18,
-                  ),
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 15,
-            vertical: 19,
-          ),
-        ),
-        onTapOutside: (_) => FocusScope.of(context).unfocus(),
-      ),
-    );
-  }
-
-  Widget _buildFederationInput(
+  Widget _buildRecipientInput(
     AppColor c,
     _ST t,
     String addr,
     RecipientInputState recipient,
   ) {
+    final isFederationEntry = recipient.mode == RecipientInputMode.federation;
     return Container(
       decoration: BoxDecoration(
         color: t.inputBg,
         borderRadius: BorderRadius.circular(14),
       ),
       child: TextField(
-        controller: _federationCtl,
+        controller: _recipientCtl,
         textInputAction: TextInputAction.next,
         keyboardType: TextInputType.multiline,
         minLines: 1,
@@ -1337,7 +1038,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Enter name*${recipient.federationDomain}',
+          hintText: 'Paste address or name*${recipient.federationDomain}',
           hintMaxLines: 1,
           hintStyle: TextStyle(
             color: t.metaColor,
@@ -1346,19 +1047,18 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 15, right: 10),
-            child: Icon(LucideIcons.atSign, color: t.labelColor, size: 17),
+            child: Icon(
+              isFederationEntry ? LucideIcons.atSign : LucideIcons.wallet,
+              color: t.labelColor,
+              size: 17,
+            ),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
           suffixIcon: addr.isNotEmpty
               ? Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: IconButton(
-                    onPressed: () async {
-                      _federationCtl.clear();
-                      await ref
-                          .read(sendControllerProvider(_args).notifier)
-                          .clearFederationSelection();
-                    },
+                    onPressed: _clearTypedRecipientInput,
                     icon: Icon(LucideIcons.x, size: 16, color: t.labelColor),
                     splashRadius: 18,
                   ),
@@ -1451,7 +1151,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         borderColor: t.errorBorder,
       );
     }
-    if (vm.recipient.mode == RecipientInputMode.federation &&
+    if (recipient.shouldShowFederationUi &&
         federationInput.isNotEmpty &&
         vm.recipient.activeValueKind == RecipientValueKind.invalid) {
       return RecipientStatusBanner(
@@ -1472,14 +1172,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         color: t.successText,
         backgroundColor: t.successTint,
         borderColor: t.successBorder,
-        trailing: vm.recipient.mode == RecipientInputMode.federation
+        trailing: recipient.shouldShowFederationUi
             ? IconButton(
-                onPressed: () async {
-                  _federationCtl.clear();
-                  await ref
-                      .read(sendControllerProvider(_args).notifier)
-                      .clearFederationSelection();
-                },
+                onPressed: _clearTypedRecipientInput,
                 icon: Icon(LucideIcons.x, size: 16, color: c.textSecondary),
                 splashRadius: 18,
               )
@@ -1573,7 +1268,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
 
   Widget _buildMemoCard(AppColor c, _ST t) {
     final hasError = _memoBytes > 28;
-    return FintechSurfaceCard(
+    return FintechFullBleedSection(
       colors: c,
       emphasisColor: hasError ? c.error : c.primary,
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -1659,7 +1354,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   }
 
   Widget _buildBreakdownCard(AppColor c, _ST t, SendState vm, String tokenStr) {
-    return FintechSurfaceCard(
+    return FintechFullBleedSection(
       colors: c,
       emphasisColor: c.primary,
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -1762,9 +1457,8 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                   Expanded(
                     child: Text(
                       canSubmit
-                          ? 'Recipient and amount look ready for final review.'
-                          : (vm.blockingReason ??
-                                'Complete all required fields to continue.'),
+                          ? 'Ready to review'
+                          : (vm.blockingReason ?? 'Complete required fields'),
                       style: TextStyle(
                         color: c.textSecondary,
                         fontSize: 12,

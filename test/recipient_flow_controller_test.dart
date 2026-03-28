@@ -98,6 +98,28 @@ void main() {
     });
 
     test(
+      'smart typed input auto-detects public address vs federation',
+      () async {
+        await controller.setTypedInput(
+          'GA7QYNF7SOWQ3GLR6QJ3A7Z2FJY3J55L4L7K6U7V3ZAHVY2V7S3N7X6I',
+        );
+        expect(latestState.mode, RecipientInputMode.publicAddress);
+        expect(latestState.shouldShowFederationUi, isFalse);
+
+        await controller.setTypedInput('alice');
+        expect(latestState.mode, RecipientInputMode.federation);
+        expect(latestState.federationSuggestions, ['alice*nextfi.com']);
+
+        await controller.setTypedInput('alice*nextfi.com');
+        expect(latestState.mode, RecipientInputMode.federation);
+        expect(
+          latestState.finalDestinationAddress,
+          'GBRPYHIL2CI3L7VQCH3M2ZQF5JQXQ6N2YHFBT3A57L6H6X4M5O5JZQAF',
+        );
+      },
+    );
+
+    test(
       'QR parsing only shows federation UI when the scanned value is federation',
       () async {
         await controller.setScannedValue(

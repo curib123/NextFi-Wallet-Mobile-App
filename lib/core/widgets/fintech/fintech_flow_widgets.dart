@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
@@ -70,14 +68,14 @@ class FintechSectionIntro extends StatelessWidget {
   const FintechSectionIntro({
     super.key,
     required this.title,
-    required this.subtitle,
     required this.colors,
+    this.subtitle,
     this.eyebrow,
     this.trailing,
   });
 
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final AppColor colors;
   final String? eyebrow;
   final Widget? trailing;
@@ -120,22 +118,24 @@ class FintechSectionIntro extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: colors.textPrimary,
-                  fontSize: 21,
+                  fontSize: 19,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: -0.55,
+                  letterSpacing: -0.45,
                   height: 1.05,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: colors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.15,
+              if ((subtitle ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -0.1,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -195,6 +195,43 @@ class FintechSurfaceCard extends StatelessWidget {
   }
 }
 
+class FintechFullBleedSection extends StatelessWidget {
+  const FintechFullBleedSection({
+    super.key,
+    required this.child,
+    required this.colors,
+    this.padding = const EdgeInsets.fromLTRB(18, 18, 18, 18),
+    this.emphasisColor,
+  });
+
+  final Widget child;
+  final AppColor colors;
+  final EdgeInsetsGeometry padding;
+  final Color? emphasisColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = emphasisColor ?? colors.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: isDark ? 0.42 : 0.68),
+        border: Border(
+          top: BorderSide(
+            color: _mix(colors.border, accent, isDark ? 0.24 : 0.14),
+          ),
+          bottom: BorderSide(
+            color: _mix(colors.border, accent, isDark ? 0.16 : 0.1),
+          ),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
 class FintechBottomActionShell extends StatelessWidget {
   const FintechBottomActionShell({
     super.key,
@@ -209,29 +246,14 @@ class FintechBottomActionShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: isDark ? 0.96 : 0.92),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.border.withValues(alpha: 0.9)),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : colors.textPrimary).withValues(
-              alpha: isDark ? 0.24 : 0.08,
-            ),
-            blurRadius: 30,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: child,
+        color: colors.surface.withValues(alpha: isDark ? 0.96 : 0.94),
+        border: Border(
+          top: BorderSide(color: colors.border.withValues(alpha: 0.9)),
         ),
       ),
+      child: child,
     );
   }
 }

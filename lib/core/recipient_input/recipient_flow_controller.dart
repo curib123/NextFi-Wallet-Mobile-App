@@ -73,6 +73,16 @@ class RecipientInputParser {
     return RecipientValueKind.invalid;
   }
 
+  static bool shouldTreatAsFederationInput(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+    if (isStellarPublicAddress(trimmed)) return false;
+    if (isFederationAddress(trimmed) || isFederationAliasInput(trimmed)) {
+      return true;
+    }
+    return false;
+  }
+
   static ParsedRecipientQr parseQr(String rawValue) {
     final trimmed = rawValue.trim();
     if (trimmed.isEmpty) {
@@ -392,6 +402,15 @@ class RecipientFlowController {
       ).copyWith(federationInput: value.trim()),
     );
     await _syncCurrentState(forceLookupForSavedRecipient: false);
+  }
+
+  Future<void> setTypedInput(String value) async {
+    final trimmed = value.trim();
+    if (RecipientInputParser.shouldTreatAsFederationInput(trimmed)) {
+      await setFederationInput(trimmed);
+      return;
+    }
+    await setManualPublicAddress(trimmed);
   }
 
   Future<void> clearFederationSelection() async {
