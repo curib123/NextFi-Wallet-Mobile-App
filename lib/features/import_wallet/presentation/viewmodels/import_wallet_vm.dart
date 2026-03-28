@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
@@ -127,10 +128,14 @@ class ImportWalletVM extends ChangeNotifier {
 
       try {
         final keyPair = await wallet.getKeyPair(index: 0);
-        await WalletSyncService.I.syncImportedWallet(
-          publicAddress: publicAddress,
-          walletName: 'Imported Wallet',
-          keyPair: keyPair,
+        unawaited(
+          WalletSyncService.I.syncImportedWallet(
+            publicAddress: publicAddress,
+            walletName: 'Imported Wallet',
+            keyPair: keyPair,
+          ).catchError((Object error, StackTrace stackTrace) {
+            debugPrint('ImportWalletVM background sync error: $error');
+          }),
         );
       } catch (_) {}
 

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +19,6 @@ class AuthGateScreen extends ConsumerStatefulWidget {
 
 class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
-  Timer? _smallVisualDelay;
   String? _lastLoggedCoverUrl;
   bool? _lastLoggedHasCover;
   bool _completingFlow = false;
@@ -76,7 +74,6 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _smallVisualDelay?.cancel();
     _bgCtrl.dispose();
     _scaleCtrl.dispose();
     _shakeCtrl.dispose();
@@ -101,8 +98,7 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   void _onSuccessNavigate() {
     if (_completingFlow) return;
     _completingFlow = true;
-    _smallVisualDelay?.cancel();
-    _smallVisualDelay = Timer(const Duration(milliseconds: 200), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final goNext = widget.goNext;
       if (goNext != null) {

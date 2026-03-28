@@ -141,6 +141,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   bool _booted = false;
   bool _scannerOpenedOnce = false;
   bool _syncingRecipientField = false;
+  bool _showMemo = false;
 
   SendControllerArgs get _args => SendControllerArgs(
     address: widget.address,
@@ -295,7 +296,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     if (sent == true && mounted) {
       _amtCtl.clear();
       _memoCtl.clear();
-      setState(() => _lastPct = null);
+      setState(() {
+        _lastPct = null;
+        _showMemo = false;
+      });
     }
   }
 
@@ -325,6 +329,9 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     if (parsed.memoText != null && parsed.memoText!.trim().isNotEmpty) {
       if (parsed.hasSupportedTextMemo) {
         _memoCtl.text = parsed.memoText!;
+        if (mounted) {
+          setState(() => _showMemo = true);
+        }
       } else if (mounted) {
         showFloatingSnackBar(
           context,
@@ -423,7 +430,6 @@ class _SendScreenState extends ConsumerState<SendScreen> {
   }
 
   Widget _buildHeader(AppColor c, _ST t, SendState vm) {
-    final tokenStr = vm.assetSymbol;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
       child: Column(
@@ -1208,78 +1214,103 @@ class _SendScreenState extends ConsumerState<SendScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _SectionLabel('Memo'),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: t.chipBg,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Text(
-                  'OPTIONAL',
-                  style: TextStyle(
-                    color: t.metaColor,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '$_memoBytes / 28',
-                style: TextStyle(
-                  color: hasError ? c.error : t.metaColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
+          _SendToggleTile(
+            colors: c,
+            title: 'Add memo',
+            subtitle: _showMemo
+                ? 'Attach an optional note like an invoice reference or tag.'
+                : 'Memo is hidden by default. Turn it on only when needed.',
+            value: _showMemo,
+            enabled: true,
+            activeLabel: 'Shown',
+            inactiveLabel: 'Hidden',
+            tone: hasError ? c.error : c.primary,
+            onChanged: (value) {
+              FocusScope.of(context).unfocus();
+              if (!value) {
+                _memoCtl.clear();
+              }
+              setState(() => _showMemo = value);
+            },
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _memoCtl,
-            minLines: 2,
-            maxLines: 3,
-            style: TextStyle(
-              fontSize: 15.5,
-              fontWeight: FontWeight.w500,
-              color: c.textPrimary,
-              letterSpacing: -0.2,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Add a note (e.g. invoice ref, exchange tag)',
-              hintStyle: TextStyle(
-                color: t.metaColor,
-                fontSize: 14,
-                letterSpacing: -0.2,
-              ),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 4),
-              isDense: false,
-            ),
-            onTapOutside: (_) => FocusScope.of(context).unfocus(),
-          ),
-          if (hasError) ...[
-            const SizedBox(height: 10),
+          if (_showMemo) ...[
+            const SizedBox(height: 14),
             Row(
               children: [
-                Icon(LucideIcons.alertCircle, size: 13, color: c.error),
-                const SizedBox(width: 6),
+                _SectionLabel('Memo'),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: t.chipBg,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    'OPTIONAL',
+                    style: TextStyle(
+                      color: t.metaColor,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ),
+                const Spacer(),
                 Text(
-                  'Memo exceeds 28 bytes - shorten it',
+                  '$_memoBytes / 28',
                   style: TextStyle(
-                    color: c.error,
+                    color: hasError ? c.error : t.metaColor,
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.1,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _memoCtl,
+              minLines: 2,
+              maxLines: 3,
+              style: TextStyle(
+                fontSize: 15.5,
+                fontWeight: FontWeight.w500,
+                color: c.textPrimary,
+                letterSpacing: -0.2,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Add a note (e.g. invoice ref, exchange tag)',
+                hintStyle: TextStyle(
+                  color: t.metaColor,
+                  fontSize: 14,
+                  letterSpacing: -0.2,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                isDense: false,
+              ),
+              onTapOutside: (_) => FocusScope.of(context).unfocus(),
+            ),
+            if (hasError) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(LucideIcons.alertCircle, size: 13, color: c.error),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Memo exceeds 28 bytes - shorten it',
+                    style: TextStyle(
+                      color: c.error,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ],
       ),
@@ -2000,6 +2031,90 @@ class _ReviewRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SendToggleTile extends StatelessWidget {
+  const _SendToggleTile({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.enabled,
+    required this.activeLabel,
+    required this.inactiveLabel,
+    required this.onChanged,
+    required this.tone,
+  });
+
+  final AppColor colors;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final bool enabled;
+  final String activeLabel;
+  final String inactiveLabel;
+  final ValueChanged<bool>? onChanged;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Switch.adaptive(
+                value: value,
+                onChanged: enabled ? onChanged : null,
+                activeColor: tone,
+              ),
+              Text(
+                value ? activeLabel : inactiveLabel,
+                style: TextStyle(
+                  color: value ? tone : colors.textSecondary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -406,6 +406,11 @@ class PortfolioOverviewSection extends StatelessWidget {
   }
 
   Widget _activityTile(PortfolioActivityItem item) {
+    final displayValue = currency.convertStoredFiatAmountToCurrent(
+      amount: item.totalValue,
+      fromCurrency: item.fiatCurrency,
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Container(
@@ -458,7 +463,7 @@ class PortfolioOverviewSection extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Text(
-              currency.formatFiat(item.totalValue),
+              currency.formatFiat(displayValue),
               style: TextStyle(
                 color: colors.chartGreen,
                 fontSize: 13,

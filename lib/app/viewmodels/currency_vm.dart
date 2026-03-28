@@ -315,6 +315,27 @@ class CurrencyVM extends ChangeNotifier {
     return amount >= 0 ? '+$formatted' : '-$formatted';
   }
 
+  double convertStoredFiatAmountToCurrent({
+    required double amount,
+    String? fromCurrency,
+  }) {
+    final safe = CurrencyMath.sanitize(amount);
+    final source = (fromCurrency ?? '').trim().toUpperCase();
+    final target = fiatCode;
+
+    if (!safe.isFinite || safe.isNaN) return 0.0;
+    if (source.isEmpty || source == target) return safe;
+
+    if (_isUsdLikeCurrency(source)) {
+      final fx = _usdToFiatRate;
+      if (fx > 0 && fx.isFinite) {
+        return safe * fx;
+      }
+    }
+
+    return safe;
+  }
+
   double usdcToFiat(double u) => (u.isFinite && !u.isNaN) ? u * _usdcRate : 0.0;
 
   double xlmToFiat(double x) => (x.isFinite && !x.isNaN) ? x * _xlmRate : 0.0;
@@ -415,6 +436,25 @@ class CurrencyVM extends ChangeNotifier {
         .where((value) => value.isFinite && !value.isNaN && value > 0)
         .map((value) => value * fx)
         .toList(growable: false);
+  }
+
+  bool _isUsdLikeCurrency(String code) {
+    switch (code.trim().toUpperCase()) {
+      case 'USD':
+      case 'USDC':
+      case 'USDT':
+      case 'USDP':
+      case 'PYUSD':
+      case 'FDUSD':
+      case 'USDB':
+      case 'USDL':
+      case 'RLUSD':
+      case 'BUSD':
+      case 'TUSD':
+        return true;
+      default:
+        return false;
+    }
   }
 
   List<double> _historyForRange(
