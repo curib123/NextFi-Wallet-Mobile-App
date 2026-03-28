@@ -10,6 +10,7 @@ import 'package:next_fi/features/contact/data/models/recipient_address_model.dar
 
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/modal/recipient_upsert_sheet.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
 
@@ -32,61 +33,90 @@ abstract class _S {
   static const double r24 = 24;
 }
 
-class RecipientListWidget extends StatelessWidget {
-  final AppColor colors;
-  final void Function(RecipientAddressModel)? onSelect;
-  final String? fromAddress;
-  final double? xlmBalance;
-  final double? usdcBalance;
-  final VoidCallback? onLoginPressed;
-  final bool showAppBar;
+Future<RecipientAddressModel?> showRecipientListModal(
+  BuildContext context, {
+  String? fromAddress,
+  bool selectionMode = false,
+  VoidCallback? onLoginPressed,
+}) {
+  final colors = AppColor.of(context);
+  return showAppModalBottomSheet<RecipientAddressModel>(
+    context,
+    builder: (_) => _RecipientListModalSheet(
+      colors: colors,
+      fromAddress: fromAddress,
+      selectionMode: selectionMode,
+      onLoginPressed: onLoginPressed,
+    ),
+  );
+}
 
-  const RecipientListWidget({
-    super.key,
+class _RecipientListModalSheet extends StatelessWidget {
+  final AppColor colors;
+  final String? fromAddress;
+  final bool selectionMode;
+  final VoidCallback? onLoginPressed;
+
+  const _RecipientListModalSheet({
     required this.colors,
-    this.onSelect,
     this.fromAddress,
-    this.xlmBalance,
-    this.usdcBalance,
+    this.selectionMode = false,
     this.onLoginPressed,
-    this.showAppBar = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final compact = mq.size.width < 360;
-    final fabBottom = _S.s20 + mq.padding.bottom;
+    final fabBottom = _S.s12 + mq.padding.bottom;
 
-    return Scaffold(
+    return AppModalBase(
+      maxHeightFactor: 0.86,
       backgroundColor: colors.surface,
-      appBar: showAppBar
-          ? AppBar(
-              backgroundColor: colors.surface,
-              elevation: 0,
-              centerTitle: true,
-              title: Text(
-                'Recipients',
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              iconTheme: IconThemeData(color: colors.textPrimary),
-            )
-          : null,
-      body: Consumer(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+      child: Consumer(
         builder: (context, ref, _) {
           final prov = ref.watch(contactListProvider);
           if (!prov.isAuthenticated && !prov.loading) {
-            return _NotAuthenticatedView(
-              colors: colors,
-              onLoginPressed: onLoginPressed,
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ModalHeader(
+                  colors: colors,
+                  title: 'Recipients',
+                  subtitle: selectionMode
+                      ? 'Choose a saved recipient'
+                      : 'Manage saved wallet destinations',
+                ),
+                const SizedBox(height: _S.s12),
+                Expanded(
+                  child: _NotAuthenticatedView(
+                    colors: colors,
+                    onLoginPressed: onLoginPressed,
+                  ),
+                ),
+              ],
             );
           }
 
-          if (prov.loading) return _LoadingView(colors: colors);
+          if (prov.loading) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ModalHeader(
+                  colors: colors,
+                  title: 'Recipients',
+                  subtitle: selectionMode
+                      ? 'Choose a saved recipient'
+                      : 'Manage saved wallet destinations',
+                ),
+                const SizedBox(height: _S.s12),
+                const Expanded(child: SizedBox.shrink()),
+                _LoadingView(colors: colors),
+                const Expanded(child: SizedBox.shrink()),
+              ],
+            );
+          }
 
           final fab = _AddButton(
             colors: colors,
@@ -118,27 +148,40 @@ class RecipientListWidget extends StatelessWidget {
               : _RecipientList(
                   colors: colors,
                   items: prov.sortedItems,
-                  onSelect: onSelect,
+                  selectionMode: selectionMode,
                   fromAddress: fromAddress,
-                  xlmBalance: xlmBalance,
-                  usdcBalance: usdcBalance,
                   compact: compact,
                   bottomInset: fabBottom + (compact ? 72 : 88),
                 );
 
-          return Stack(
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: body,
+              _ModalHeader(
+                colors: colors,
+                title: 'Recipients',
+                subtitle: selectionMode
+                    ? 'Choose a saved recipient'
+                    : 'Manage saved wallet destinations',
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: fabBottom,
-                child: Center(child: fab),
+              const SizedBox(height: _S.s12),
+              Expanded(
+                child: Stack(
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: body,
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: fabBottom,
+                      child: Center(child: fab),
+                    ),
+                  ],
+                ),
               ),
             ],
           );
@@ -344,20 +387,16 @@ class _AddButtonState extends State<_AddButton> {
 class _RecipientList extends StatelessWidget {
   final AppColor colors;
   final List<RecipientAddressModel> items;
-  final void Function(RecipientAddressModel)? onSelect;
+  final bool selectionMode;
   final String? fromAddress;
-  final double? xlmBalance;
-  final double? usdcBalance;
   final bool compact;
   final double bottomInset;
 
   const _RecipientList({
     required this.colors,
     required this.items,
-    this.onSelect,
+    required this.selectionMode,
     this.fromAddress,
-    this.xlmBalance,
-    this.usdcBalance,
     required this.compact,
     required this.bottomInset,
   });
@@ -393,9 +432,9 @@ class _RecipientList extends StatelessWidget {
             recipient: r,
             compact: compact,
             onTap: () async {
-              if (onSelect != null) {
+              if (selectionMode) {
                 HapticFeedback.selectionClick();
-                onSelect!(r);
+                Navigator.of(context).pop(r);
                 return;
               }
               final addr = r.address.trim();
@@ -1156,4 +1195,56 @@ Future<bool?> _confirmDelete(
       ),
     ),
   );
+}
+
+class _ModalHeader extends StatelessWidget {
+  const _ModalHeader({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final AppColor colors;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.45,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: colors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -0.15,
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          splashRadius: 20,
+          icon: Icon(LucideIcons.x, size: 18, color: colors.textSecondary),
+        ),
+      ],
+    );
+  }
 }

@@ -34,7 +34,7 @@ const FlutterSecureStorage _secure = FlutterSecureStorage(
 );
 
 final ValueNotifier<ThemeMode> _themeModeVN = ValueNotifier(ThemeMode.system);
-final ValueNotifier<int> _themeStyleVN = ValueNotifier(1);
+final ValueNotifier<int> _themeStyleVN = ValueNotifier(0);
 
 Future<void> _loadInitialThemeMode() async {
   final raw = await _secure.read(key: _kThemePrefKey) ?? 'system';
@@ -49,7 +49,7 @@ Future<void> _loadInitialThemeMode() async {
 Future<void> _loadInitialThemeStyle() async {
   final raw = await _secure.read(key: _kThemeStylePrefKey);
   final parsed = int.tryParse(raw ?? '');
-  _themeStyleVN.value = AppColor.normalizeThemeStyleIndex(parsed ?? 1);
+  _themeStyleVN.value = AppColor.normalizeThemeStyleIndex(parsed ?? 0);
 }
 
 Future<void> _setThemeStyle(int styleIndex) async {

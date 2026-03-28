@@ -11,12 +11,14 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/recipient_input/recipient_flow_controller.dart';
 import 'package:next_fi/core/widgets/asset/asset_logo.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
+import 'package:next_fi/core/widgets/fintech/fintech_flow_widgets.dart';
+import 'package:next_fi/core/widgets/modal/recipient_list_modal.dart';
 import 'package:next_fi/core/widgets/modal/recipient_upsert_sheet.dart';
+import 'package:next_fi/core/widgets/recipient/recipient_common_widgets.dart';
 
 import 'package:next_fi/features/claimable/data/models/claimable_item.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_notifier.dart';
 import 'package:next_fi/features/contact/data/models/recipient_address_model.dart';
-import 'package:next_fi/features/wallet_home/presentation/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/scanner/presentation/screens/scanner_screen.dart';
 import 'package:next_fi/core/services/federation_address/federation_address_core_service.dart';
 
@@ -301,18 +303,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Future<void> _selectRecipient() async {
-    final c = AppColor.of(context);
-    final selected = await Navigator.push<RecipientAddressModel>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RecipientListWidget(
-          colors: c,
-          onSelect: (recipient) {
-            Navigator.pop(context, recipient);
-          },
-        ),
-      ),
-    );
+    final selected = await showRecipientListModal(context, selectionMode: true);
     if (selected != null && mounted) {
       await _recipientFlow.selectSavedRecipient(selected);
     }
@@ -335,11 +326,6 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     }
   }
 
-  String _shortenAddress(String addr) {
-    if (addr.length <= 16) return addr;
-    return '${addr.substring(0, 6)}...${addr.substring(addr.length - 6)}';
-  }
-
   Color _blend(Color base, Color accent, double amount) =>
       Color.lerp(base, accent, amount) ?? base;
 
@@ -351,126 +337,285 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
 
     return Scaffold(
       backgroundColor: c.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildModernHeader(c),
-            Expanded(
-              child: Form(
-                key: _form,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 10, 22, 28),
-                  children: [
-                    const SizedBox(height: 8),
-                    _buildSectionIntro(c, title: 'Mode'),
-                    const SizedBox(height: 10),
-                    _buildModeCard(c),
-                    const SizedBox(height: 18),
-                    _buildSectionIntro(c, title: 'Amount'),
-                    const SizedBox(height: 10),
-                    _buildAmountCard(c, currentBal),
-                    const SizedBox(height: 18),
-                    _buildSectionIntro(c, title: 'Recipient'),
-                    const SizedBox(height: 10),
-                    _buildRecipientCard(c),
-                    if (_mode == ClaimableMode.timeLocked) ...[
-                      const SizedBox(height: 18),
-                      _buildSectionIntro(c, title: 'Unlock'),
-                      const SizedBox(height: 10),
-                      _buildUnlockCard(c),
+      body: FintechFlowBackground(
+        colors: c,
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildModernHeader(c, currentBal),
+              Expanded(
+                child: Form(
+                  key: _form,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 28),
+                    children: [
+                      _buildSectionIntro(
+                        c,
+                        title: 'Mode',
+                        subtitle:
+                            'Choose when the recipient can claim the funds.',
+                        eyebrow: 'Flow',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildModeCard(c),
+                      const SizedBox(height: 22),
+                      _buildSectionIntro(
+                        c,
+                        title: 'Amount',
+                        subtitle: 'Set the value to lock on-chain.',
+                        eyebrow: 'Balance',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildAmountCard(c, currentBal),
+                      const SizedBox(height: 22),
+                      _buildSectionIntro(
+                        c,
+                        title: 'Recipient',
+                        subtitle:
+                            'Select the wallet that can claim this balance.',
+                        eyebrow: 'Destination',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildRecipientCard(c),
+                      if (_mode == ClaimableMode.timeLocked) ...[
+                        const SizedBox(height: 22),
+                        _buildSectionIntro(
+                          c,
+                          title: 'Unlock',
+                          subtitle: 'Choose when the recipient gains access.',
+                          eyebrow: 'Schedule',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildUnlockCard(c),
+                      ],
+                      const SizedBox(height: 22),
+                      _buildSectionIntro(
+                        c,
+                        title: 'Expiry',
+                        subtitle:
+                            'Optionally reclaim the balance after a cutoff.',
+                        eyebrow: 'Controls',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildExpirationCard(c),
+                      if (_mode == ClaimableMode.timeLocked || _hasExpiry) ...[
+                        const SizedBox(height: 22),
+                        _buildSectionIntro(
+                          c,
+                          title: 'Rules',
+                          subtitle:
+                              'A simple summary of how this balance behaves.',
+                          eyebrow: 'Summary',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoCard(c),
+                      ],
+                      const SizedBox(height: 110),
                     ],
-                    const SizedBox(height: 18),
-                    _buildSectionIntro(c, title: 'Expiry'),
-                    const SizedBox(height: 10),
-                    _buildExpirationCard(c),
-                    if (_mode == ClaimableMode.timeLocked || _hasExpiry) ...[
-                      const SizedBox(height: 18),
-                      _buildSectionIntro(c, title: 'Rules'),
-                      const SizedBox(height: 10),
-                      _buildInfoCard(c),
-                    ],
-                    const SizedBox(height: 100),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: _buildFloatingActionBar(c),
     );
   }
 
-  Widget _buildModernHeader(AppColor c) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 22, 14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border(
-          bottom: BorderSide(color: c.border.withValues(alpha: 0.8), width: 1),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildModernHeader(AppColor c, double currentBal) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+      child: Column(
         children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary, size: 22),
-            splashRadius: 22,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Claimable Balance',
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: Icon(
+                  LucideIcons.arrowLeft,
+                  color: c.textPrimary,
+                  size: 22,
+                ),
+                splashRadius: 22,
+              ),
+              Expanded(
+                child: Text(
+                  'Claimable',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.6,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.35,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Create',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12.8,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.1,
+              ),
+              const SizedBox(width: 48),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FintechSurfaceCard(
+            colors: c,
+            emphasisColor: _mode == ClaimableMode.timeLocked
+                ? c.warning
+                : c.primary,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: c.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: c.primary.withValues(alpha: 0.14),
+                          ),
+                        ),
+                        child: Text(
+                          'Programmable payout',
+                          style: TextStyle(
+                            color: c.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.35,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        _mode == ClaimableMode.timeLocked
+                            ? 'Create scheduled balance'
+                            : 'Create claimable balance',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 25,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.9,
+                          height: 1.05,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Lock funds on Stellar with clean expiry and unlock controls for the recipient.',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildHeaderStatChip(
+                            c,
+                            icon: LucideIcons.wallet,
+                            label:
+                                'Available ${currentBal.toStringAsFixed(2)} $_selectedAsset',
+                          ),
+                          _buildHeaderStatChip(
+                            c,
+                            icon: _mode == ClaimableMode.timeLocked
+                                ? LucideIcons.clock3
+                                : LucideIcons.zap,
+                            label: _mode == ClaimableMode.timeLocked
+                                ? 'Scheduled release'
+                                : 'Instant claim',
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
+                ),
+                const SizedBox(width: 16),
+                Container(
+                  width: 66,
+                  height: 66,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        c.primary.withValues(alpha: 0.18),
+                        c.primary.withValues(alpha: 0.08),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: c.primary.withValues(alpha: 0.14),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: AssetLogo(keyOrSymbol: _selectedAsset, size: 34),
                 ),
               ],
             ),
           ),
-          AssetLogo(keyOrSymbol: _selectedAsset, size: 32),
         ],
       ),
     );
   }
 
-  Widget _buildSectionIntro(AppColor c, {required String title}) {
-    return Text(
-      title,
-      style: TextStyle(
-        color: c.textPrimary,
-        fontSize: 17,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.35,
+  Widget _buildHeaderStatChip(
+    AppColor c, {
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.surface.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.border.withValues(alpha: 0.9)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: c.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 11.8,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  Widget _buildSectionIntro(
+    AppColor c, {
+    required String title,
+    required String subtitle,
+    required String eyebrow,
+  }) {
+    return FintechSectionIntro(
+      title: title,
+      subtitle: subtitle,
+      colors: c,
+      eyebrow: eyebrow,
+    );
+  }
+
   Widget _buildModeCard(AppColor c) {
-    return Container(
-      padding: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
-        ),
-      ),
+    return FintechSurfaceCard(
+      colors: c,
+      emphasisColor: _mode == ClaimableMode.timeLocked ? c.warning : c.primary,
+      padding: const EdgeInsets.all(18),
       child: Row(
         children: [
           Expanded(
@@ -568,14 +713,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildAmountCard(AppColor c, double currentBal) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        border: Border(
-          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
-        ),
-      ),
+    return FintechSurfaceCard(
+      colors: c,
+      emphasisColor: c.primary,
+      padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -706,14 +847,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
         );
     final activeRecipient = _recipientState.activeRecipient;
 
-    return Container(
+    return FintechSurfaceCard(
+      colors: c,
+      emphasisColor: c.primary,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        border: Border(
-          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
-        ),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -732,12 +869,14 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
               _buildQuickActionButton(
                 c,
                 icon: LucideIcons.qrCode,
+                label: 'Scan',
                 onTap: _scanQR,
               ),
               const SizedBox(width: 8),
               _buildQuickActionButton(
                 c,
                 icon: LucideIcons.users,
+                label: 'Contacts',
                 onTap: _selectRecipient,
               ),
             ],
@@ -807,56 +946,36 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
+    return RecipientModeChip(
+      label: label,
+      icon: icon,
+      selected: selected,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? _blend(c.surface, c.primary, 0.14) : c.surface,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? c.primary : c.border,
-            width: selected ? 1.2 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: selected ? c.primary : c.textSecondary),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected ? c.primary : c.textPrimary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
+      backgroundColor: c.surface,
+      selectedBackgroundColor: _blend(c.surface, c.primary, 0.14),
+      borderColor: c.border,
+      selectedBorderColor: c.primary,
+      textColor: c.textPrimary,
+      selectedTextColor: c.primary,
+      iconColor: c.textSecondary,
+      selectedIconColor: c.primary,
     );
   }
 
   Widget _buildQuickActionButton(
     AppColor c, {
     required IconData icon,
+    required String label,
     required VoidCallback onTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
+    return RecipientQuickActionButton(
+      icon: icon,
+      label: label,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: isDark ? c.background : c.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: c.border, width: 1),
-        ),
-        child: Icon(icon, size: 18, color: c.primary),
-      ),
+      backgroundColor: isDark ? c.background : c.surface,
+      borderColor: c.border,
+      iconColor: c.primary,
     );
   }
 
@@ -866,20 +985,11 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildRecipientLoadingState(AppColor c) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: _blend(c.surface, c.primary, 0.14),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.primary, width: 1.2),
-      ),
-      child: Center(
-        child: SizedBox(
-          height: 20,
-          width: 20,
-          child: CircularProgressIndicator(strokeWidth: 2.5, color: c.primary),
-        ),
-      ),
+    return RecipientLookupLoadingCard(
+      backgroundColor: _blend(c.surface, c.primary, 0.14),
+      borderColor: c.primary,
+      spinnerColor: c.primary,
+      labelColor: c.textPrimary,
     );
   }
 
@@ -921,41 +1031,11 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: c.border, width: 1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                payload.rawValue.isEmpty
-                    ? 'No QR scanned yet'
-                    : 'Scanned value',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                payload.rawValue.isEmpty
-                    ? 'Scan a public Stellar address or federation QR code.'
-                    : payload.rawValue,
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  fontFeatures: const [ui.FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
+        RecipientScannedValueCard(
+          rawValue: payload.rawValue,
+          emptyMessage: 'Scan a public Stellar address or federation QR code.',
+          backgroundColor: c.surface,
+          borderColor: c.border,
         ),
         const SizedBox(height: 10),
         Row(
@@ -1063,203 +1143,52 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     required IconData icon,
     required VoidCallback onTap,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: c.primary),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 14.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12.5,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onTap,
-            icon: Icon(icon, size: 16, color: c.primary),
-            label: Text(buttonLabel),
-          ),
-        ],
-      ),
+    return RecipientPickerEmptyState(
+      title: title,
+      subtitle: subtitle,
+      buttonLabel: buttonLabel,
+      icon: icon,
+      onTap: onTap,
+      backgroundColor: c.surface,
+      borderColor: c.border,
     );
   }
 
   Widget _buildSavedRecipientChip(AppColor c, RecipientAddressModel recipient) {
     final color = Color(recipient.color);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _blend(isDark ? c.background : c.surface, color, 0.16),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _blend(c.border, color, 0.7), width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: _blend(c.surface, color, 0.22),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Text(
-                recipient.name.isNotEmpty
-                    ? recipient.name[0].toUpperCase()
-                    : '?',
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  recipient.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _shortenAddress(recipient.address),
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _editRecipient,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: _blend(c.surface, color, 0.22),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.pencil, size: 16, color: color),
-            ),
-          ),
-        ],
-      ),
+    return RecipientSavedCard(
+      name: recipient.name,
+      address: recipient.address,
+      colorValue: recipient.color,
+      onEdit: _editRecipient,
+      backgroundColor: _blend(isDark ? c.background : c.surface, color, 0.16),
+      borderColor: _blend(c.border, color, 0.7),
+      avatarBackgroundColor: _blend(c.surface, color, 0.22),
+      editBackgroundColor: _blend(c.surface, color, 0.22),
+      addressColor: c.textSecondary,
     );
   }
 
   Widget _buildNewRecipientChip(AppColor c, String addr) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? c.background : c.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border, width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: _blend(c.surface, c.primary, 0.18),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'New address',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _shortenAddress(addr),
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () async {
-              final saved = await showRecipientUpsertSheet(
-                context,
-                address: addr,
-              );
-              if (saved == true && mounted) {
-                await ref.read(contactListProvider.notifier).refresh();
-                await _recipientFlow.initialize();
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: c.primary,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                'Save',
-                style: TextStyle(
-                  color: c.onPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return RecipientNewAddressCard(
+      address: addr,
+      onAdd: () async {
+        final saved = await showRecipientUpsertSheet(context, address: addr);
+        if (saved == true && mounted) {
+          await ref.read(contactListProvider.notifier).refresh();
+          await _recipientFlow.initialize();
+        }
+      },
+      backgroundColor: isDark ? c.background : c.surface,
+      borderColor: c.border,
+      iconBackgroundColor: _blend(c.surface, c.primary, 0.18),
+      iconColor: c.primary,
+      addressColor: c.textSecondary,
+      saveBackgroundColor: c.primary,
+      saveBorderColor: c.primary,
+      saveTextColor: c.onPrimary,
     );
   }
 
@@ -1401,43 +1330,50 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   Widget _buildFederationStatus(AppColor c) {
     final input = _recipientState.federationInput.trim();
     if (_recipientState.federationLoading) {
-      return _buildFederationBanner(
-        c,
-        icon: null,
+      return RecipientStatusBanner(
         title: 'Resolving federation address...',
         color: c.primary,
+        backgroundColor: _blend(c.surface, c.primary, 0.12),
+        borderColor: _blend(c.border, c.primary, 0.65),
         showSpinner: true,
       );
     }
 
     if (_recipientState.federationError != null) {
-      return _buildFederationBanner(
-        c,
+      return RecipientStatusBanner(
         icon: LucideIcons.alertCircle,
         title: _recipientState.federationError!,
         color: c.error,
+        backgroundColor: _blend(c.surface, c.error, 0.12),
+        borderColor: _blend(c.border, c.error, 0.65),
+        titleColor: c.textPrimary,
       );
     }
 
     if (_recipientState.mode == RecipientInputMode.federation &&
         input.isNotEmpty &&
         _recipientState.activeValueKind == RecipientValueKind.invalid) {
-      return _buildFederationBanner(
-        c,
+      return RecipientStatusBanner(
         icon: LucideIcons.info,
         title: 'Enter a federation address like name*$_federationDomain',
         color: c.primary,
+        backgroundColor: _blend(c.surface, c.primary, 0.12),
+        borderColor: _blend(c.border, c.primary, 0.65),
+        titleColor: c.textPrimary,
       );
     }
 
     final resolved = _recipientState.resolvedFederation;
     if (resolved != null && resolved.accountId.trim().isNotEmpty) {
-      return _buildFederationBanner(
-        c,
+      return RecipientStatusBanner(
         icon: LucideIcons.checkCircle2,
-        title: 'Resolved to ${_shortenAddress(resolved.accountId)}',
+        title: 'Resolved to ${shortenRecipientAddress(resolved.accountId)}',
         subtitle: resolved.stellarAddress,
         color: c.success,
+        backgroundColor: _blend(c.surface, c.success, 0.12),
+        borderColor: _blend(c.border, c.success, 0.65),
+        titleColor: c.textPrimary,
+        subtitleColor: c.textSecondary,
         trailing: _recipientState.mode == RecipientInputMode.federation
             ? IconButton(
                 onPressed: () async {
@@ -1454,76 +1390,11 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     return const SizedBox.shrink();
   }
 
-  Widget _buildFederationBanner(
-    AppColor c, {
-    required IconData? icon,
-    required String title,
-    required Color color,
-    String? subtitle,
-    bool showSpinner = false,
-    Widget? trailing,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: _blend(c.surface, color, 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _blend(c.border, color, 0.65), width: 1),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (showSpinner)
-            SizedBox(
-              height: 16,
-              width: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: color),
-            )
-          else if (icon != null)
-            Icon(icon, size: 16, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12.5,
-                  ),
-                ),
-                if (subtitle != null && subtitle.trim().isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle.trim(),
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 11.5,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (trailing != null) ...[const SizedBox(width: 8), trailing],
-        ],
-      ),
-    );
-  }
-
   Widget _buildUnlockCard(AppColor c) {
-    return Container(
+    return FintechSurfaceCard(
+      colors: c,
+      emphasisColor: c.primary,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        border: Border(
-          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
-        ),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1595,14 +1466,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildExpirationCard(AppColor c) {
-    return Container(
+    return FintechSurfaceCard(
+      colors: c,
+      emphasisColor: c.warning,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        border: Border(
-          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
-        ),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1778,14 +1645,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
           'Recipient can claim anytime. Balance held on Stellar network until claimed.';
     }
 
-    return Container(
+    return FintechSurfaceCard(
+      colors: c,
+      emphasisColor: isTimeLocked ? c.warning : c.primary,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        border: Border(
-          bottom: BorderSide(color: c.border.withValues(alpha: 0.65), width: 1),
-        ),
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1816,44 +1679,71 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildFloatingActionBar(AppColor c) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+    return FintechBottomActionShell(
+      colors: c,
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          height: 56,
-          child: AppElevatedButton(
-            onPressed: () {
-              HapticFeedback.mediumImpact();
-              _submit();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: c.primary,
-              foregroundColor: c.onPrimary,
-              elevation: 0,
-              shadowColor: c.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.shieldCheck, size: 14, color: c.success),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _mode == ClaimableMode.timeLocked
+                          ? 'You are creating a scheduled claimable balance with enforced release timing.'
+                          : 'You are creating a claimable balance the recipient can redeem immediately.',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(LucideIcons.send, size: 20),
-                const SizedBox(width: 12),
-                Text(
-                  _mode == ClaimableMode.timeLocked
-                      ? 'Create Scheduled Balance'
-                      : 'Create Balance',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
+            SizedBox(
+              height: 56,
+              child: AppElevatedButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  _submit();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: c.primary,
+                  foregroundColor: c.onPrimary,
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-              ],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(LucideIcons.send, size: 20),
+                    const SizedBox(width: 12),
+                    Text(
+                      _mode == ClaimableMode.timeLocked
+                          ? 'Create Scheduled Balance'
+                          : 'Create Balance',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

@@ -12,6 +12,7 @@ import 'package:next_fi/core/recipient_input/recipient_flow_controller.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
+import 'package:next_fi/core/widgets/modal/recipient_list_modal.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/portfolio/presentation/screens/portfolio_screen.dart';
@@ -24,7 +25,6 @@ import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home
 import 'package:next_fi/features/wallet_home/presentation/widgets/asset_widget.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/header_section.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/incoming_hints_strip.dart';
-import 'package:next_fi/features/wallet_home/presentation/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/top_bar.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/wallet_header_guide.dart';
 
@@ -336,19 +336,8 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
 
   Future<void> _openRecipientList() async {
     if (!mounted) return;
-    final colors = AppColor.of(context);
     final s = ref.read(walletHomeVmProvider).state;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RecipientListWidget(
-          colors: colors,
-          fromAddress: s.address,
-          xlmBalance: s.xlm,
-          usdcBalance: s.usdc,
-          showAppBar: true,
-        ),
-      ),
-    );
+    await showRecipientListModal(context, fromAddress: s.address);
   }
 
   Future<void> _autoSaveActiveWalletAddressIfMissing() async {
