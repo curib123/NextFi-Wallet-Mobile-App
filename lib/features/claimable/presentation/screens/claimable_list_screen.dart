@@ -11,10 +11,10 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
+import 'package:next_fi/core/widgets/modal/claimable_create_modal.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
 
 import 'package:next_fi/features/claimable/presentation/viewmodels/claimable_vm.dart';
-import 'package:next_fi/features/claimable/presentation/screens/claimable_create_screen.dart';
 import 'package:next_fi/features/claimable/presentation/widgets/claimable_card.dart';
 import 'package:next_fi/features/claimable/presentation/widgets/sent_claimable_card.dart';
 import 'package:next_fi/features/claimable/presentation/widgets/claimable_empty.dart';
@@ -74,10 +74,12 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
 
     try {
       final txHash = await ref.read(claimableVmProvider).claim(balanceId);
-      await ref.read(portfolioVmProvider).refreshForWallet(
-        walletState: ref.read(walletHomeVmProvider).state,
-        trigger: WalletSnapshotTrigger.claim,
-      );
+      await ref
+          .read(portfolioVmProvider)
+          .refreshForWallet(
+            walletState: ref.read(walletHomeVmProvider).state,
+            trigger: WalletSnapshotTrigger.claim,
+          );
       if (!mounted) return;
 
       HapticFeedback.mediumImpact();
@@ -116,9 +118,8 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
       vm.accountId ?? '',
       balanceResolver: (asset) => vm.getBalanceForSymbol(asset.id),
       title: 'Select Asset to Lock',
-      screenBuilder: (address, token, balance) {
-        return ClaimableCreateScreen(initialAsset: token.toUpperCase());
-      },
+      onSelect: (address, token, balance) =>
+          showClaimableCreateModal(context, initialAsset: token),
     ).then((_) {
       if (mounted) {
         ref.read(claimableVmProvider).refresh();

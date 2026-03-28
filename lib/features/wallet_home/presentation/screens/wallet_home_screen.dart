@@ -13,12 +13,12 @@ import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
 import 'package:next_fi/core/widgets/modal/recipient_list_modal.dart';
+import 'package:next_fi/core/widgets/modal/send_flow_modal.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/portfolio/presentation/screens/portfolio_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/scanner/presentation/screens/scanner_screen.dart';
-import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
@@ -406,17 +406,14 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     }
 
     final balance = walletState.balancesByAssetId['stellar'] ?? walletState.xlm;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SendScreen(
-          address: senderAddress,
-          assetId: 'stellar',
-          balance: balance,
-          prefillAddress: raw.trim(),
-          initialRecipientMode: RecipientInputMode.scannedQr,
-          onTransactionCompleted: () => walletVm.refresh(force: true),
-        ),
-      ),
+    await showSendModal(
+      context,
+      address: senderAddress,
+      assetId: 'stellar',
+      balance: balance,
+      prefillAddress: raw.trim(),
+      initialRecipientMode: RecipientInputMode.scannedQr,
+      onTransactionCompleted: () => walletVm.refresh(force: true),
     );
   }
 
@@ -487,7 +484,8 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
         e.address,
         balanceResolver: (asset) => vm.state.balancesByAssetId[asset.id] ?? 0.0,
         title: 'Select Asset',
-        screenBuilder: (address, token, balance) => SendScreen(
+        onSelect: (address, token, balance) => showSendModal(
+          context,
           address: address,
           assetId: token,
           balance: balance,

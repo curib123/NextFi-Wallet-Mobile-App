@@ -12,8 +12,8 @@ Future<void> showTokenSelector(
   BuildContext context,
   String address, {
   double Function(AssetModel asset)? balanceResolver,
-  required Widget Function(String address, String token, double balance)
-  screenBuilder,
+  required Future<void> Function(String address, String token, double balance)
+  onSelect,
   String title = 'Select Asset',
 }) async {
   final assetVM = ProviderScope.containerOf(
@@ -28,15 +28,11 @@ Future<void> showTokenSelector(
     return 0.0;
   }
 
-  void open(AssetModel asset) {
+  Future<void> open(AssetModel asset) async {
     final balance = balanceFor(asset);
     Navigator.of(context).pop();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => screenBuilder(address, asset.id, balance),
-      ),
-    );
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await onSelect(address, asset.id, balance);
   }
 
   await showAppModalBottomSheet(
@@ -64,7 +60,7 @@ class _TokenSelectorSheet extends ConsumerStatefulWidget {
   final List<AssetModel> assets;
   final int allAssetCount;
   final double Function(AssetModel) balanceFor;
-  final void Function(AssetModel) onSelect;
+  final Future<void> Function(AssetModel) onSelect;
 
   @override
   ConsumerState<_TokenSelectorSheet> createState() =>
@@ -103,8 +99,8 @@ class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
                       return _SelectableTokenTile(
                         asset: asset,
                         balance: widget.balanceFor(asset),
-                        onTap: () {
-                          widget.onSelect(asset);
+                        onTap: () async {
+                          await widget.onSelect(asset);
                         },
                       );
                     },
@@ -153,11 +149,7 @@ class _Header extends StatelessWidget {
               gradient: colors.primaryGradient,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(
-              LucideIcons.coins,
-              color: colors.onPrimary,
-              size: 19,
-            ),
+            child: Icon(LucideIcons.coins, color: colors.onPrimary, size: 19),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -300,6 +292,7 @@ class _SelectableTokenTile extends StatelessWidget {
     return value.toStringAsFixed(6);
   }
 }
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 

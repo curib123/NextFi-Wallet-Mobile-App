@@ -7,9 +7,9 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
+import 'package:next_fi/core/widgets/modal/send_flow_modal.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
-import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/portfolio_overview_section.dart';
 
@@ -84,11 +84,13 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
 
   Future<void> _bindPortfolio() async {
     final walletVm = ref.read(walletHomeVmProvider);
-    await ref.read(portfolioVmProvider).bindActiveWallet(
-      localWalletId: ref.read(seedKeypairProvider).activeWalletId,
-      address: walletVm.state.address,
-      label: walletVm.state.walletName,
-    );
+    await ref
+        .read(portfolioVmProvider)
+        .bindActiveWallet(
+          localWalletId: ref.read(seedKeypairProvider).activeWalletId,
+          address: walletVm.state.address,
+          label: walletVm.state.walletName,
+        );
   }
 
   Future<void> _handleRefresh() async {
@@ -113,7 +115,8 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
       balanceResolver: (asset) =>
           walletVm.state.balancesByAssetId[asset.id] ?? 0.0,
       title: 'Select Asset',
-      screenBuilder: (selectedAddress, token, balance) => SendScreen(
+      onSelect: (selectedAddress, token, balance) => showSendModal(
+        context,
         address: selectedAddress,
         assetId: token,
         balance: balance,
@@ -139,10 +142,8 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ReceiveScreen(
-          address: address,
-          initialAssetId: 'stellar',
-        ),
+        builder: (_) =>
+            ReceiveScreen(address: address, initialAssetId: 'stellar'),
       ),
     );
   }
@@ -159,7 +160,8 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
       balanceResolver: (asset) =>
           walletVm.state.balancesByAssetId[asset.id] ?? 0.0,
       title: 'Select Asset',
-      screenBuilder: (selectedAddress, token, balance) => SendScreen(
+      onSelect: (selectedAddress, token, balance) => showSendModal(
+        context,
         address: selectedAddress,
         assetId: token,
         balance: balance,

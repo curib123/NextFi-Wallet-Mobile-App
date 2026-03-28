@@ -9,9 +9,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/recipient_input/recipient_flow_controller.dart';
-import 'package:next_fi/core/widgets/asset/asset_logo.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
-import 'package:next_fi/core/widgets/fintech/fintech_flow_widgets.dart';
 import 'package:next_fi/core/widgets/modal/recipient_list_modal.dart';
 import 'package:next_fi/core/widgets/modal/recipient_upsert_sheet.dart';
 import 'package:next_fi/core/widgets/recipient/recipient_common_widgets.dart';
@@ -24,8 +22,13 @@ import 'package:next_fi/core/services/federation_address/federation_address_core
 
 class ClaimableCreateScreen extends ConsumerStatefulWidget {
   final String initialAsset;
+  final bool useScaffold;
 
-  const ClaimableCreateScreen({super.key, this.initialAsset = 'XLM'});
+  const ClaimableCreateScreen({
+    super.key,
+    this.initialAsset = 'XLM',
+    this.useScaffold = true,
+  });
 
   @override
   ConsumerState<ClaimableCreateScreen> createState() =>
@@ -33,7 +36,6 @@ class ClaimableCreateScreen extends ConsumerStatefulWidget {
 }
 
 class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
-  final _form = GlobalKey<FormState>();
   final _recipientCtl = TextEditingController();
   final _amountCtl = TextEditingController();
 
@@ -58,7 +60,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedAsset = widget.initialAsset;
+    _selectedAsset = _normalizeAssetSymbol(widget.initialAsset);
     _recipientState = RecipientInputState.initial(
       federationDomain: _federationDomain,
     );
@@ -198,7 +200,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   String? _validate() {
     final addr = _recipientState.finalDestinationAddress;
     if (addr == null) {
-      return 'Select or enter a valid recipient destination.';
+      return 'Enter a valid recipient';
     }
 
     final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
@@ -211,7 +213,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
 
     if (_mode == ClaimableMode.timeLocked) {
       final dt = _combinedUnlockDateTime;
-      if (dt == null) return 'Pick an unlock date';
+      if (dt == null) return 'Set an unlock date';
       if (dt.isBefore(DateTime.now())) {
         return 'Unlock time must be in the future';
       }
@@ -219,7 +221,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
 
     if (_hasExpiry) {
       final dt = _combinedExpiryDateTime;
-      if (dt == null) return 'Pick an expiry date';
+      if (dt == null) return 'Set an expiry date';
       if (dt.isBefore(DateTime.now())) {
         return 'Expiry time must be in the future';
       }
@@ -241,7 +243,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       showAppAlert(
         context,
         type: AppAlertType.error,
-        title: 'Validation Error',
+        title: 'Check details',
         subtitle: err,
       );
       return;
@@ -250,8 +252,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     final ctl = showAppAlert(
       context,
       type: AppAlertType.loading,
-      title: 'Creating Balance',
-      subtitle: 'Please wait while we process your transaction...',
+      title: 'Creating claimable',
+      subtitle: 'Submitting transaction...',
       barrierDismissible: false,
     );
 
@@ -259,7 +261,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       final vm = ref.read(claimableVmProvider);
       final addr = _recipientState.finalDestinationAddress;
       if (addr == null) {
-        throw StateError('Recipient must resolve to a valid Stellar account.');
+        throw StateError('Recipient must resolve to a valid address.');
       }
       final amt = double.parse(_amountCtl.text.trim());
 
@@ -299,8 +301,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
 
       ctl.update(
         AppAlertType.success,
-        title: 'Balance Created',
-        subtitle: 'Claimable balance created successfully\n$txHash',
+        title: 'Claimable created',
+        subtitle: txHash,
         onPrimary: () => Navigator.pop(context, true),
       );
     } catch (e) {
@@ -346,6 +348,143 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   Color _blend(Color base, Color accent, double amount) =>
       Color.lerp(base, accent, amount) ?? base;
 
+  String _normalizeAssetSymbol(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return 'XLM';
+
+    final assetVm = ref.read(assetVmProvider);
+    final direct = assetVm.findAsset(trimmed);
+    if (direct != null) {
+      final code = (direct.assetCode ?? direct.symbol).trim().toUpperCase();
+      if (code.isNotEmpty) return code;
+    }
+
+    for (final asset in assetVm.assets) {
+      if (!asset.matchesKey(trimmed)) continue;
+      final code = (asset.assetCode ?? asset.symbol).trim().toUpperCase();
+      if (code.isNotEmpty) return code;
+    }
+
+    final upper = trimmed.toUpperCase();
+    if (upper.contains('USDC')) return 'USDC';
+    if (upper.contains('XLM') || upper == 'NATIVE') return 'XLM';
+    return upper;
+  }
+
+  String _formatAmountValue(double value, {int decimals = 7}) {
+    final text = value.toStringAsFixed(decimals);
+    return text.contains('.') ? text.replaceFirst(RegExp(r'\.?0+$'), '') : text;
+  }
+
+  Color _cardBackground(AppColor c) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return isDark
+        ? c.surface.withValues(alpha: 0.88)
+        : c.onPrimary.withValues(alpha: 0.96);
+  }
+
+  Widget _buildModalCard(
+    AppColor c, {
+    required Widget child,
+    Color? accent,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(18),
+  }) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: _cardBackground(c),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: accent == null ? c.border : _blend(c.border, accent, 0.32),
+        ),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildCardLabel(AppColor c, String label) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: c.textSecondary,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.35,
+      ),
+    );
+  }
+
+  Widget _buildModeChip(
+    AppColor c, {
+    required bool selected,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? _blend(c.surface, c.primary, 0.14) : c.background,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: selected ? c.primary : c.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _timingSummary() {
+    final unlock = _combinedUnlockDateTime;
+    final expiry = _combinedExpiryDateTime;
+
+    if (_mode == ClaimableMode.unconditional && !_hasExpiry) {
+      return null;
+    }
+
+    if (_mode == ClaimableMode.timeLocked && unlock != null && _hasExpiry && expiry != null) {
+      return 'Claim after ${_dateFmt.format(unlock)} ${_unlockTime?.format(context) ?? '12:00 AM'} and before ${_dateFmt.format(expiry)} ${_expiryTime?.format(context) ?? '11:59 PM'}.';
+    }
+
+    if (_mode == ClaimableMode.timeLocked && unlock != null) {
+      return 'Claim after ${_dateFmt.format(unlock)} ${_unlockTime?.format(context) ?? '12:00 AM'}.';
+    }
+
+    if (_hasExpiry && expiry != null) {
+      return 'Claim before ${_dateFmt.format(expiry)} ${_expiryTime?.format(context) ?? '11:59 PM'}.';
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
@@ -353,79 +492,53 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     final currentBal = vm.getBalanceForSymbol(_selectedAsset);
     _syncRecipientField();
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: FintechFlowBackground(
-        colors: c,
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildModernHeader(c, currentBal),
-              Expanded(
-                child: Form(
-                  key: _form,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(0, 6, 0, 28),
-                    children: [
-                      _buildSectionIntro(c, title: 'Mode'),
-                      const SizedBox(height: 12),
-                      _buildModeCard(c),
-                      const SizedBox(height: 22),
-                      _buildSectionIntro(c, title: 'Amount'),
-                      const SizedBox(height: 12),
-                      _buildAmountCard(c, currentBal),
-                      const SizedBox(height: 22),
-                      _buildSectionIntro(c, title: 'Recipient'),
-                      const SizedBox(height: 12),
-                      _buildRecipientCard(c),
-                      if (_mode == ClaimableMode.timeLocked) ...[
-                        const SizedBox(height: 22),
-                        _buildSectionIntro(c, title: 'Unlock'),
-                        const SizedBox(height: 12),
-                        _buildUnlockCard(c),
-                      ],
-                      const SizedBox(height: 22),
-                      _buildSectionIntro(c, title: 'Expiry'),
-                      const SizedBox(height: 12),
-                      _buildExpirationCard(c),
-                      if (_mode == ClaimableMode.timeLocked || _hasExpiry) ...[
-                        const SizedBox(height: 22),
-                        _buildSectionIntro(c, title: 'Rules'),
-                        const SizedBox(height: 12),
-                        _buildInfoCard(c),
-                      ],
-                      const SizedBox(height: 110),
-                    ],
-                  ),
-                ),
+    final content = ColoredBox(
+      color: c.background,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildModernHeader(c),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+                children: [
+                  _buildAmountCard(c, currentBal),
+                  const SizedBox(height: 16),
+                  _buildRecipientCard(c),
+                  const SizedBox(height: 16),
+                  _buildTimingCard(c),
+                  const SizedBox(height: 8),
+                ],
               ),
-            ],
-          ),
+            ),
+            _buildFloatingActionBar(c),
+          ],
         ),
       ),
-      bottomNavigationBar: _buildFloatingActionBar(c),
     );
+
+    if (widget.useScaffold) {
+      return Scaffold(backgroundColor: c.background, body: content);
+    }
+    return ColoredBox(color: c.background, child: content);
   }
 
-  Widget _buildModernHeader(AppColor c, double currentBal) {
+  Widget _buildModernHeader(AppColor c) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      child: Row(
         children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: Icon(
-                  LucideIcons.arrowLeft,
-                  color: c.textPrimary,
-                  size: 22,
-                ),
-                splashRadius: 22,
-              ),
-              Expanded(
-                child: Text(
-                  'Claimable',
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: Icon(LucideIcons.x, color: c.textPrimary, size: 20),
+            splashRadius: 20,
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  'Create claimable',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: c.textPrimary,
@@ -434,218 +547,60 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                     letterSpacing: -0.35,
                   ),
                 ),
-              ),
-              const SizedBox(width: 48),
-            ],
-          ),
-          const SizedBox(height: 8),
-          FintechFullBleedSection(
-            colors: c,
-            emphasisColor: _mode == ClaimableMode.timeLocked
-                ? c.warning
-                : c.primary,
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _mode == ClaimableMode.timeLocked
-                            ? 'Scheduled balance'
-                            : 'Claimable balance',
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.7,
-                          height: 1.05,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            LucideIcons.wallet,
-                            size: 13,
-                            color: c.textSecondary,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '${currentBal.toStringAsFixed(2)} $_selectedAsset available',
-                              style: TextStyle(
-                                color: c.textSecondary,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -0.1,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 14),
+                const SizedBox(height: 4),
                 Container(
-                  width: 56,
-                  height: 56,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        c.primary.withValues(alpha: 0.18),
-                        c.primary.withValues(alpha: 0.08),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: c.primary.withValues(alpha: 0.14),
+                    color: _blend(c.surface, c.primary, 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: _blend(c.border, c.primary, 0.3)),
+                  ),
+                  child: Text(
+                    _selectedAsset,
+                    style: TextStyle(
+                      color: c.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
                     ),
                   ),
-                  alignment: Alignment.center,
-                  child: AssetLogo(keyOrSymbol: _selectedAsset, size: 30),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionIntro(AppColor c, {required String title}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: FintechSectionIntro(title: title, colors: c),
-    );
-  }
-
-  Widget _buildModeCard(AppColor c) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return FintechFullBleedSection(
-      colors: c,
-      emphasisColor: _mode == ClaimableMode.timeLocked ? c.warning : c.primary,
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Release type',
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: isDark ? c.background : c.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: c.border),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<ClaimableMode>(
-                value: _mode,
-                isExpanded: true,
-                borderRadius: BorderRadius.circular(16),
-                dropdownColor: isDark ? c.surface : c.onPrimary,
-                icon: Icon(
-                  LucideIcons.chevronDown,
-                  size: 18,
-                  color: c.textSecondary,
-                ),
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
-                ),
-                onChanged: (ClaimableMode? value) {
-                  if (value == null || value == _mode) return;
-                  HapticFeedback.selectionClick();
-                  setState(() => _mode = value);
-                },
-                items: const [
-                  DropdownMenuItem<ClaimableMode>(
-                    value: ClaimableMode.unconditional,
-                    child: _ClaimableModeMenuRow(
-                      icon: LucideIcons.zap,
-                      title: 'Instant',
-                      subtitle: 'Claim anytime',
-                    ),
-                  ),
-                  DropdownMenuItem<ClaimableMode>(
-                    value: ClaimableMode.timeLocked,
-                    child: _ClaimableModeMenuRow(
-                      icon: LucideIcons.clock3,
-                      title: 'Time schedule',
-                      subtitle: 'Claim after unlock',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            _mode == ClaimableMode.timeLocked
-                ? 'Funds unlock on the schedule you choose.'
-                : 'Recipient can claim as soon as it is created.',
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -0.1,
-            ),
-          ),
+          const SizedBox(width: 48),
         ],
       ),
     );
   }
 
   Widget _buildAmountCard(AppColor c, double currentBal) {
-    return FintechFullBleedSection(
-      colors: c,
-      emphasisColor: c.primary,
-      padding: const EdgeInsets.all(22),
+    return _buildModalCard(
+      c,
+      accent: c.primary,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'Amount',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
-                  height: 1,
-                ),
-              ),
+              _buildCardLabel(c, 'AMOUNT'),
               const Spacer(),
-              Icon(LucideIcons.wallet, size: 14, color: c.textSecondary),
-              const SizedBox(width: 6),
               Text(
-                '${currentBal.toStringAsFixed(2)} $_selectedAsset',
+                'Available ${_formatAmountValue(currentBal, decimals: _selectedAsset == 'XLM' ? 4 : 2)} $_selectedAsset',
                 style: TextStyle(
                   color: c.textSecondary,
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
+                  letterSpacing: -0.1,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -661,19 +616,19 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                     ),
                   ],
                   style: TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 42,
+                    fontWeight: FontWeight.w800,
                     color: c.textPrimary,
-                    letterSpacing: -1.5,
-                    height: 1.1,
+                    letterSpacing: -1.8,
+                    height: 1.05,
                   ),
                   decoration: InputDecoration(
                     hintText: '0',
                     hintStyle: TextStyle(
                       color: c.border,
-                      fontSize: 40,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -1.5,
+                      fontSize: 42,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1.8,
                     ),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
@@ -686,23 +641,32 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    _selectedAsset,
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.3,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Text(
+                      _selectedAsset,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.1,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
                   GestureDetector(
                     onTap: () {
                       HapticFeedback.lightImpact();
                       _amountCtl.text = currentBal > 0
-                          ? currentBal
-                                .toStringAsFixed(7)
-                                .replaceFirst(RegExp(r'\.?0+$'), '')
+                          ? _formatAmountValue(currentBal)
                           : '';
                       _amountCtl.selection = TextSelection.fromPosition(
                         TextPosition(offset: _amountCtl.text.length),
@@ -714,9 +678,9 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: _blend(c.surface, c.primary, 0.16),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: c.primary, width: 1),
+                        color: _blend(c.surface, c.primary, 0.14),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _blend(c.border, c.primary, 0.32)),
                       ),
                       child: Text(
                         'MAX',
@@ -724,7 +688,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                           color: c.primary,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.45,
                         ),
                       ),
                     ),
@@ -746,24 +710,15 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
         );
     final activeRecipient = _recipientState.activeRecipient;
 
-    return FintechFullBleedSection(
-      colors: c,
-      emphasisColor: c.primary,
-      padding: const EdgeInsets.all(20),
+    return _buildModalCard(
+      c,
+      accent: c.primary,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'Recipient',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
-                ),
-              ),
+              _buildCardLabel(c, 'TO'),
               const Spacer(),
               _buildQuickActionButton(
                 c,
@@ -780,7 +735,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           if (_recipientState.mode == RecipientInputMode.savedRecipient)
             _buildSavedRecipientPanel(c)
           else if (_recipientState.mode == RecipientInputMode.scannedQr)
@@ -792,19 +747,157 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     );
   }
 
+  Widget _buildTimingCard(AppColor c) {
+    final summary = _timingSummary();
+
+    return _buildModalCard(
+      c,
+      accent: _mode == ClaimableMode.timeLocked || _hasExpiry
+          ? c.primary
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCardLabel(c, 'AVAILABILITY'),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildModeChip(
+                  c,
+                  selected: _mode == ClaimableMode.unconditional,
+                  title: 'Now',
+                  subtitle: 'Claim anytime',
+                  onTap: () {
+                    if (_mode == ClaimableMode.unconditional) return;
+                    setState(() => _mode = ClaimableMode.unconditional);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildModeChip(
+                  c,
+                  selected: _mode == ClaimableMode.timeLocked,
+                  title: 'Schedule',
+                  subtitle: 'Unlock later',
+                  onTap: () {
+                    if (_mode == ClaimableMode.timeLocked) return;
+                    setState(() => _mode = ClaimableMode.timeLocked);
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (_mode == ClaimableMode.timeLocked) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Unlock',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildDateTimePicker(c, isDate: true, isUnlock: true),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildDateTimePicker(c, isDate: false, isUnlock: true),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Row(
+              children: [
+                Text(
+                  'Expiry',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const Spacer(),
+                Switch(
+                  value: _hasExpiry,
+                  activeColor: c.primary,
+                  onChanged: (value) {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _hasExpiry = value;
+                      if (!value) {
+                        _expiryDate = null;
+                        _expiryTime = null;
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          if (_hasExpiry) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildDateTimePicker(c, isDate: true, isUnlock: false),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildDateTimePicker(c, isDate: false, isUnlock: false),
+                ),
+              ],
+            ),
+          ],
+          if (summary != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _blend(c.surface, c.primary, 0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _blend(c.border, c.primary, 0.3)),
+              ),
+              child: Text(
+                summary,
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  height: 1.35,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuickActionButton(
     AppColor c, {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return RecipientQuickActionButton(
       icon: icon,
       label: label,
       onTap: onTap,
-      backgroundColor: isDark ? c.background : c.surface,
-      borderColor: c.border,
+      backgroundColor: c.background,
+      borderColor: _blend(c.border, c.primary, 0.08),
       iconColor: c.primary,
     );
   }
@@ -816,8 +909,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
 
   Widget _buildRecipientLoadingState(AppColor c) {
     return RecipientLookupLoadingCard(
-      backgroundColor: _blend(c.surface, c.primary, 0.14),
-      borderColor: c.primary,
+      backgroundColor: c.background,
+      borderColor: _blend(c.border, c.primary, 0.22),
       spinnerColor: c.primary,
       labelColor: c.textPrimary,
     );
@@ -828,9 +921,9 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     if (recipient == null) {
       return _buildRecipientPickerEmptyState(
         c,
-        title: 'Choose a saved recipient',
-        subtitle: 'Pick from saved contacts.',
-        buttonLabel: 'Open recipient list',
+        title: 'No recipient selected',
+        subtitle: 'Paste an address or choose a contact.',
+        buttonLabel: 'Contacts',
         icon: LucideIcons.users,
         onTap: _selectRecipient,
       );
@@ -852,7 +945,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
             TextButton.icon(
               onPressed: _clearTypedRecipientInput,
               icon: const Icon(LucideIcons.pencil, size: 16),
-              label: const Text('Enter manually'),
+              label: const Text('Manual'),
             ),
           ],
         ),
@@ -873,8 +966,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       children: [
         RecipientScannedValueCard(
           rawValue: payload.rawValue,
-          emptyMessage: 'Scan an address or federation code.',
-          backgroundColor: c.surface,
+          emptyMessage: 'Scan an address or federation.',
+          backgroundColor: c.background,
           borderColor: c.border,
         ),
         const SizedBox(height: 10),
@@ -884,7 +977,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
               child: OutlinedButton.icon(
                 onPressed: _scanQR,
                 icon: const Icon(LucideIcons.scanLine, size: 16),
-                label: const Text('Scan again'),
+                label: const Text('Rescan'),
               ),
             ),
             const SizedBox(width: 10),
@@ -964,7 +1057,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       buttonLabel: buttonLabel,
       icon: icon,
       onTap: onTap,
-      backgroundColor: c.surface,
+      backgroundColor: c.background,
       borderColor: c.border,
     );
   }
@@ -986,7 +1079,6 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildNewRecipientChip(AppColor c, String addr) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return RecipientNewAddressCard(
       address: addr,
       onAdd: () async {
@@ -996,7 +1088,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
           await _recipientFlow.initialize();
         }
       },
-      backgroundColor: isDark ? c.background : c.surface,
+      backgroundColor: c.background,
       borderColor: c.border,
       iconBackgroundColor: _blend(c.surface, c.primary, 0.18),
       iconColor: c.primary,
@@ -1008,13 +1100,13 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildRecipientInputField(AppColor c, String addr) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isFederationEntry =
         _recipientState.mode == RecipientInputMode.federation;
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? c.background : c.surface,
+        color: c.background,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border),
       ),
       child: TextField(
         controller: _recipientCtl,
@@ -1030,7 +1122,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Paste address or name*$_federationDomain',
+          hintText: 'Address or name*$_federationDomain',
           hintStyle: TextStyle(
             color: c.textSecondary,
             fontSize: 14,
@@ -1080,8 +1172,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
-              side: BorderSide(color: c.primary),
-              backgroundColor: _blend(c.surface, c.primary, 0.12),
+              side: BorderSide(color: _blend(c.border, c.primary, 0.28)),
+              backgroundColor: c.background,
               onPressed: () => _applyFederationSuggestion(s),
             ),
           )
@@ -1093,10 +1185,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     final input = _recipientState.federationInput.trim();
     if (_recipientState.federationLoading) {
       return RecipientStatusBanner(
-        title: 'Resolving federation address...',
+        title: 'Resolving address...',
         color: c.primary,
-        backgroundColor: _blend(c.surface, c.primary, 0.12),
-        borderColor: _blend(c.border, c.primary, 0.65),
+        backgroundColor: c.background,
+        borderColor: _blend(c.border, c.primary, 0.3),
         showSpinner: true,
       );
     }
@@ -1106,8 +1198,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
         icon: LucideIcons.alertCircle,
         title: _recipientState.federationError!,
         color: c.error,
-        backgroundColor: _blend(c.surface, c.error, 0.12),
-        borderColor: _blend(c.border, c.error, 0.65),
+        backgroundColor: c.background,
+        borderColor: _blend(c.border, c.error, 0.3),
         titleColor: c.textPrimary,
       );
     }
@@ -1117,10 +1209,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
         _recipientState.activeValueKind == RecipientValueKind.invalid) {
       return RecipientStatusBanner(
         icon: LucideIcons.info,
-        title: 'Enter a federation address like name*$_federationDomain',
+        title: 'Use name*$_federationDomain',
         color: c.primary,
-        backgroundColor: _blend(c.surface, c.primary, 0.12),
-        borderColor: _blend(c.border, c.primary, 0.65),
+        backgroundColor: c.background,
+        borderColor: _blend(c.border, c.primary, 0.3),
         titleColor: c.textPrimary,
       );
     }
@@ -1129,11 +1221,11 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     if (resolved != null && resolved.accountId.trim().isNotEmpty) {
       return RecipientStatusBanner(
         icon: LucideIcons.checkCircle2,
-        title: 'Resolved to ${shortenRecipientAddress(resolved.accountId)}',
+        title: 'Resolved ${shortenRecipientAddress(resolved.accountId)}',
         subtitle: resolved.stellarAddress,
         color: c.success,
-        backgroundColor: _blend(c.surface, c.success, 0.12),
-        borderColor: _blend(c.border, c.success, 0.65),
+        backgroundColor: c.background,
+        borderColor: _blend(c.border, c.success, 0.3),
         titleColor: c.textPrimary,
         subtitleColor: c.textSecondary,
         trailing: _recipientState.shouldShowFederationUi
@@ -1149,189 +1241,13 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     return const SizedBox.shrink();
   }
 
-  Widget _buildUnlockCard(AppColor c) {
-    return FintechFullBleedSection(
-      colors: c,
-      emphasisColor: c.primary,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _blend(c.surface, c.primary, 0.18),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(LucideIcons.clock, size: 16, color: c.primary),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Unlock schedule',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDateTimePicker(c, isDate: true, isUnlock: true),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildDateTimePicker(c, isDate: false, isUnlock: true),
-              ),
-            ],
-          ),
-          if (_combinedUnlockDateTime != null) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _blend(c.surface, c.primary, 0.14),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: c.primary, width: 1),
-              ),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.checkCircle2, size: 16, color: c.primary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Unlocks ${_dateFmt.format(_combinedUnlockDateTime!)} at ${_unlockTime?.format(context) ?? '12:00 AM'}',
-                      style: TextStyle(
-                        color: c.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpirationCard(AppColor c) {
-    return FintechFullBleedSection(
-      colors: c,
-      emphasisColor: c.warning,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _blend(c.surface, c.warning, 0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(LucideIcons.timerOff, size: 16, color: c.warning),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Add expiration',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-              Transform.scale(
-                scale: 0.85,
-                child: Switch(
-                  value: _hasExpiry,
-                  activeColor: c.warning,
-                  onChanged: (v) {
-                    HapticFeedback.selectionClick();
-                    setState(() {
-                      _hasExpiry = v;
-                      if (!v) {
-                        _expiryDate = null;
-                        _expiryTime = null;
-                      }
-                    });
-                  },
-                ),
-              ),
-            ],
-          ),
-          if (_hasExpiry) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDateTimePicker(c, isDate: true, isUnlock: false),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildDateTimePicker(
-                    c,
-                    isDate: false,
-                    isUnlock: false,
-                  ),
-                ),
-              ],
-            ),
-            if (_combinedExpiryDateTime != null) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _blend(c.surface, c.warning, 0.16),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: c.warning, width: 1),
-                ),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.alertTriangle, size: 16, color: c.warning),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Reclaimable after ${_dateFmt.format(_combinedExpiryDateTime!)} at ${_expiryTime?.format(context) ?? '11:59 PM'}',
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _buildDateTimePicker(
     AppColor c, {
     required bool isDate,
     required bool isUnlock,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final icon = isDate ? LucideIcons.calendar : LucideIcons.clock;
-    final color = isUnlock ? c.primary : c.warning;
+    final color = c.primary;
     final value = isDate
         ? (isUnlock ? _unlockDate : _expiryDate)
         : (isUnlock ? _unlockTime : _expiryTime);
@@ -1353,7 +1269,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: isDark ? c.background : c.surface,
+          color: c.background,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: value != null ? color : c.border,
@@ -1386,173 +1302,44 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildInfoCard(AppColor c) {
-    final isTimeLocked = _mode == ClaimableMode.timeLocked;
-
-    String message;
-    if (isTimeLocked && _hasExpiry) {
-      message = 'Claim after unlock, before expiry.';
-    } else if (isTimeLocked) {
-      message = 'Claim after unlock.';
-    } else if (_hasExpiry) {
-      message = 'Claim before expiry.';
-    } else {
-      message = 'Claimable anytime.';
-    }
-
-    return FintechFullBleedSection(
-      colors: c,
-      emphasisColor: isTimeLocked ? c.warning : c.primary,
-      padding: const EdgeInsets.all(18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: _blend(c.surface, c.primary, 0.16),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(LucideIcons.info, size: 16, color: c.primary),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                height: 1.5,
-                letterSpacing: -0.2,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildFloatingActionBar(AppColor c) {
-    return FintechBottomActionShell(
-      colors: c,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+      decoration: BoxDecoration(
+        color: c.background,
+        border: Border(
+          top: BorderSide(color: c.border.withValues(alpha: 0.85)),
+        ),
+      ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.shieldCheck, size: 14, color: c.success),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _mode == ClaimableMode.timeLocked
-                          ? 'Unlock schedule active'
-                          : 'Ready',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                  ),
-                ],
+        child: SizedBox(
+          height: 56,
+          child: AppElevatedButton(
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              _submit();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: c.primary,
+              foregroundColor: c.onPrimary,
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
             ),
-            SizedBox(
-              height: 56,
-              child: AppElevatedButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  _submit();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: c.primary,
-                  foregroundColor: c.onPrimary,
-                  elevation: 0,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(LucideIcons.send, size: 20),
-                    const SizedBox(width: 12),
-                    Text(
-                      _mode == ClaimableMode.timeLocked
-                          ? 'Create Scheduled Balance'
-                          : 'Create Balance',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ],
-                ),
+            child: const Text(
+              'Create claimable',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ClaimableModeMenuRow extends StatelessWidget {
-  const _ClaimableModeMenuRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: c.primary),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

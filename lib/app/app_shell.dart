@@ -9,7 +9,7 @@ import 'package:next_fi/features/claimable/presentation/screens/claimable_list_s
 import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
 import 'package:next_fi/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
-import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
+import 'package:next_fi/core/widgets/modal/send_flow_modal.dart';
 import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
 import 'package:next_fi/features/transactions/presentation/screens/transaction_screen.dart';
@@ -116,19 +116,15 @@ class _HomeState extends ConsumerState<Home> {
         final balance =
             wallet.balancesByAssetId[assetId] ??
             (assetId == 'stellar' ? wallet.xlm : 0.0);
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => SendScreen(
-              address: address,
-              assetId: assetId,
-              balance: balance,
-              autoOpenScanner:
-                  payload['scan']?.toString().toLowerCase() == 'true',
-              prefillAddress: payload['address']?.toString(),
-              prefillName: payload['name']?.toString(),
-              onTransactionCompleted: () => vm.refresh(force: true),
-            ),
-          ),
+        await showSendModal(
+          context,
+          address: address,
+          assetId: assetId,
+          balance: balance,
+          autoOpenScanner: payload['scan']?.toString().toLowerCase() == 'true',
+          prefillAddress: payload['address']?.toString(),
+          prefillName: payload['name']?.toString(),
+          onTransactionCompleted: () => vm.refresh(force: true),
         );
         return true;
       default:

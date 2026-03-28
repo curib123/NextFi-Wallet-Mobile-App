@@ -211,21 +211,12 @@ class FintechFullBleedSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = emphasisColor ?? colors.primary;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
         color: colors.surface.withValues(alpha: isDark ? 0.42 : 0.68),
-        border: Border(
-          top: BorderSide(
-            color: _mix(colors.border, accent, isDark ? 0.24 : 0.14),
-          ),
-          bottom: BorderSide(
-            color: _mix(colors.border, accent, isDark ? 0.16 : 0.1),
-          ),
-        ),
       ),
       child: child,
     );

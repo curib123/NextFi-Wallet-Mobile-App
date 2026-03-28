@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_notifier.dart';
-import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
+import 'package:next_fi/core/widgets/modal/send_flow_modal.dart';
 import 'package:next_fi/features/contact/data/models/recipient_address_model.dart';
 
 import 'package:next_fi/app/theme/app_color.dart';
@@ -465,7 +465,8 @@ class _RecipientList extends StatelessWidget {
                   ).read(walletHomeVmProvider).state;
                   return walletState.balancesByAssetId[asset.id] ?? 0.0;
                 },
-                screenBuilder: (address, token, balance) => SendScreen(
+                onSelect: (address, token, balance) => showSendModal(
+                  context,
                   address: address,
                   assetId: token,
                   balance: balance,

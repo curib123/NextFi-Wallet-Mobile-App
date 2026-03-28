@@ -109,6 +109,7 @@ class SendScreen extends ConsumerStatefulWidget {
   final RecipientAddressModel? prefillRecipient;
   final RecipientInputMode? initialRecipientMode;
   final Future<void> Function()? onTransactionCompleted;
+  final bool useScaffold;
 
   const SendScreen({
     super.key,
@@ -121,6 +122,7 @@ class SendScreen extends ConsumerStatefulWidget {
     this.prefillRecipient,
     this.initialRecipientMode,
     this.onTransactionCompleted,
+    this.useScaffold = true,
   });
 
   @override
@@ -360,68 +362,68 @@ class _SendScreenState extends ConsumerState<SendScreen> {
     _syncRecipientField(vm.recipient);
 
     if (vm.loading) {
-      return Scaffold(
-        backgroundColor: c.background,
-        body: const _LoadingState(),
-      );
+      return _wrapRoot(c, const _LoadingState());
     }
     if (vm.error != null) {
-      return Scaffold(
-        backgroundColor: c.background,
-        body: _ErrorState(message: vm.error!, onRetry: _refresh),
-      );
+      return _wrapRoot(c, _ErrorState(message: vm.error!, onRetry: _refresh));
     }
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: FintechFlowBackground(
-        colors: c,
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(c, t, vm, tokenStr),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _refresh,
-                  color: c.primary,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(0, 6, 0, 28),
-                    children: [
-                      _buildSectionIntro(c, title: 'Amount'),
+    final content = FintechFlowBackground(
+      colors: c,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildHeader(c, t, vm),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                color: c.primary,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(0, 6, 0, 28),
+                  children: [
+                    _buildAmountCard(c, t, vm, tokenStr),
+                    const SizedBox(height: 22),
+                    _buildSectionIntro(c, title: 'Recipient'),
+                    const SizedBox(height: 12),
+                    _buildRecipientCard(c, t, vm),
+                    if (!vm.isXlm) ...[
                       const SizedBox(height: 12),
-                      _buildAmountCard(c, t, vm, tokenStr),
-                      const SizedBox(height: 22),
-                      _buildSectionIntro(c, title: 'Recipient'),
-                      const SizedBox(height: 12),
-                      _buildRecipientCard(c, t, vm),
-                      if (!vm.isXlm) ...[
-                        const SizedBox(height: 12),
-                        _buildTrustlineStatus(c, t, vm),
-                      ],
-                      const SizedBox(height: 22),
-                      _buildSectionIntro(c, title: 'Memo'),
-                      const SizedBox(height: 12),
-                      _buildMemoCard(c, t),
-                      if (vm.typedAmount > 0) ...[
-                        const SizedBox(height: 22),
-                        _buildSectionIntro(c, title: 'Review'),
-                        const SizedBox(height: 12),
-                        _buildBreakdownCard(c, t, vm, tokenStr),
-                      ],
-                      const SizedBox(height: 110),
+                      _buildTrustlineStatus(c, t, vm),
                     ],
-                  ),
+                    const SizedBox(height: 22),
+                    _buildSectionIntro(c, title: 'Memo'),
+                    const SizedBox(height: 12),
+                    _buildMemoCard(c, t),
+                    if (vm.typedAmount > 0) ...[
+                      const SizedBox(height: 22),
+                      _buildSectionIntro(c, title: 'Review'),
+                      const SizedBox(height: 12),
+                      _buildBreakdownCard(c, t, vm, tokenStr),
+                    ],
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+            _buildActionBar(c, t, vm),
+          ],
         ),
       ),
-      bottomNavigationBar: _buildActionBar(c, t, vm),
     );
+
+    return _wrapRoot(c, content);
   }
 
-  Widget _buildHeader(AppColor c, _ST t, SendState vm, String tokenStr) {
+  Widget _wrapRoot(AppColor c, Widget child) {
+    if (widget.useScaffold) {
+      return Scaffold(backgroundColor: c.background, body: child);
+    }
+    return ColoredBox(color: c.background, child: child);
+  }
+
+  Widget _buildHeader(AppColor c, _ST t, SendState vm) {
+    final tokenStr = vm.assetSymbol;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
       child: Column(
@@ -453,76 +455,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          FintechFullBleedSection(
-            colors: c,
-            emphasisColor: c.primary,
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Send $tokenStr',
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.7,
-                          height: 1.05,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            LucideIcons.wallet,
-                            size: 13,
-                            color: c.textSecondary,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '${_fmtAmount(vm.senderBalanceToken, decimals: vm.isXlm ? 4 : 2)} $tokenStr available',
-                              style: TextStyle(
-                                color: c.textSecondary,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -0.1,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        c.primary.withValues(alpha: 0.18),
-                        c.primary.withValues(alpha: 0.08),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: c.primary.withValues(alpha: 0.14),
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: AssetLogo(keyOrSymbol: tokenStr, size: 30),
-                ),
-              ],
-            ),
-          ),
+         
         ],
       ),
     );
