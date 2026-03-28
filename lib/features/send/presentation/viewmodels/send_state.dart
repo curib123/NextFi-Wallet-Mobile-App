@@ -1,6 +1,6 @@
 import 'package:next_fi/features/contact/data/models/recipient_address_model.dart';
 import 'package:next_fi/core/models/asset_model.dart';
-import 'package:next_fi/core/services/federation_address/models/federation_address_models.dart';
+import 'package:next_fi/core/recipient_input/recipient_flow_controller.dart';
 
 class SendControllerArgs {
   const SendControllerArgs({
@@ -9,6 +9,8 @@ class SendControllerArgs {
     required this.balance,
     this.prefillAddress,
     this.prefillName,
+    this.prefillRecipient,
+    this.initialRecipientMode,
   });
 
   final String address;
@@ -16,6 +18,8 @@ class SendControllerArgs {
   final double balance;
   final String? prefillAddress;
   final String? prefillName;
+  final RecipientAddressModel? prefillRecipient;
+  final RecipientInputMode? initialRecipientMode;
 
   @override
   bool operator ==(Object other) {
@@ -24,12 +28,23 @@ class SendControllerArgs {
         other.assetId == assetId &&
         other.balance == balance &&
         other.prefillAddress == prefillAddress &&
-        other.prefillName == prefillName;
+        other.prefillName == prefillName &&
+        other.prefillRecipient?.id == prefillRecipient?.id &&
+        other.prefillRecipient?.address == prefillRecipient?.address &&
+        other.initialRecipientMode == initialRecipientMode;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(address, assetId, balance, prefillAddress, prefillName);
+  int get hashCode => Object.hash(
+    address,
+    assetId,
+    balance,
+    prefillAddress,
+    prefillName,
+    prefillRecipient?.id,
+    prefillRecipient?.address,
+    initialRecipientMode,
+  );
 }
 
 class SendState {
@@ -37,26 +52,18 @@ class SendState {
     required this.assetId,
     required this.senderAddress,
     required this.senderBalanceToken,
-    required this.recipientInput,
-    required this.destinationAddress,
+    required this.recipient,
     required this.typedAmount,
     required this.memo,
     required this.loading,
     required this.checking,
     required this.submitting,
-    required this.recipientLoading,
-    required this.federationLoading,
-    required this.federationDomain,
-    required this.federationSuggestions,
     required this.asset,
     this.accountId,
     this.prefillName,
     this.error,
     this.estNetworkFeeXlm,
     this.destinationHasTrustline,
-    this.resolvedRecipient,
-    this.resolvedFederation,
-    this.federationError,
     this.destinationMemoRequired,
     this.destinationMemoHint,
     this.merchantProfile,
@@ -67,22 +74,17 @@ class SendState {
     String federationDomain,
     AssetModel asset,
   ) {
-    final recipientInput = (args.prefillAddress ?? '').trim();
+    final recipient = _buildInitialRecipientState(args, federationDomain);
     return SendState(
       assetId: args.assetId,
       senderAddress: args.address,
       senderBalanceToken: args.balance,
-      recipientInput: recipientInput,
-      destinationAddress: recipientInput,
+      recipient: recipient,
       typedAmount: 0,
       memo: '',
       loading: true,
       checking: false,
       submitting: false,
-      recipientLoading: false,
-      federationLoading: false,
-      federationDomain: federationDomain,
-      federationSuggestions: const [],
       asset: asset,
       prefillName: args.prefillName?.trim().isEmpty == true
           ? null
@@ -90,29 +92,53 @@ class SendState {
     );
   }
 
+  static RecipientInputState _buildInitialRecipientState(
+    SendControllerArgs args,
+    String federationDomain,
+  ) {
+    final prefillAddress = (args.prefillAddress ?? '').trim();
+    final prefillRecipient = args.prefillRecipient;
+    final mode =
+        args.initialRecipientMode ??
+        (prefillRecipient != null
+            ? RecipientInputMode.savedRecipient
+            : RecipientInputParser.isFederationAddress(prefillAddress)
+            ? RecipientInputMode.federation
+            : RecipientInputParser.isStellarPublicAddress(prefillAddress)
+            ? RecipientInputMode.publicAddress
+            : RecipientInputMode.publicAddress);
+
+    return RecipientInputState.initial(
+      federationDomain: federationDomain,
+      mode: mode,
+      savedRecipient: prefillRecipient,
+      scannedRawValue: mode == RecipientInputMode.scannedQr
+          ? prefillAddress
+          : '',
+      manualPublicAddress: mode == RecipientInputMode.publicAddress
+          ? prefillAddress
+          : '',
+      federationInput: mode == RecipientInputMode.federation
+          ? prefillAddress
+          : '',
+    );
+  }
+
   final String assetId;
   final String senderAddress;
   final double senderBalanceToken;
-  final String recipientInput;
-  final String destinationAddress;
+  final RecipientInputState recipient;
   final double typedAmount;
   final String memo;
   final bool loading;
   final bool checking;
   final bool submitting;
-  final bool recipientLoading;
-  final bool federationLoading;
-  final String federationDomain;
-  final List<String> federationSuggestions;
   final AssetModel asset;
   final String? accountId;
   final String? prefillName;
   final String? error;
   final double? estNetworkFeeXlm;
   final bool? destinationHasTrustline;
-  final RecipientAddressModel? resolvedRecipient;
-  final FederationResolveResponse? resolvedFederation;
-  final String? federationError;
   final bool? destinationMemoRequired;
   final String? destinationMemoHint;
   final Map<String, dynamic>? merchantProfile;
@@ -120,9 +146,10 @@ class SendState {
   bool get isXlm => asset.isNative;
   bool get requiresTrustline => asset.requiresTrustline;
   double get networkFee => estNetworkFeeXlm ?? 0;
-  String? get recipientLabel => resolvedRecipient?.name ?? prefillName;
+  String? get recipientLabel => recipient.activeRecipient?.name ?? prefillName;
   String get assetSymbol => asset.symbol.toUpperCase();
   String get assetName => asset.name;
+  String get destinationAddress => recipient.finalDestinationAddress ?? '';
 
   double _floor7(double v) => (v * 1e7).floor() / 1e7;
 
@@ -163,26 +190,18 @@ class SendState {
     String? assetId,
     String? senderAddress,
     double? senderBalanceToken,
-    String? recipientInput,
-    String? destinationAddress,
+    RecipientInputState? recipient,
     double? typedAmount,
     String? memo,
     bool? loading,
     bool? checking,
     bool? submitting,
-    bool? recipientLoading,
-    bool? federationLoading,
-    String? federationDomain,
-    List<String>? federationSuggestions,
     AssetModel? asset,
     Object? accountId = _sentinel,
     Object? prefillName = _sentinel,
     Object? error = _sentinel,
     Object? estNetworkFeeXlm = _sentinel,
     Object? destinationHasTrustline = _sentinel,
-    Object? resolvedRecipient = _sentinel,
-    Object? resolvedFederation = _sentinel,
-    Object? federationError = _sentinel,
     Object? destinationMemoRequired = _sentinel,
     Object? destinationMemoHint = _sentinel,
     Object? merchantProfile = _sentinel,
@@ -191,18 +210,12 @@ class SendState {
       assetId: assetId ?? this.assetId,
       senderAddress: senderAddress ?? this.senderAddress,
       senderBalanceToken: senderBalanceToken ?? this.senderBalanceToken,
-      recipientInput: recipientInput ?? this.recipientInput,
-      destinationAddress: destinationAddress ?? this.destinationAddress,
+      recipient: recipient ?? this.recipient,
       typedAmount: typedAmount ?? this.typedAmount,
       memo: memo ?? this.memo,
       loading: loading ?? this.loading,
       checking: checking ?? this.checking,
       submitting: submitting ?? this.submitting,
-      recipientLoading: recipientLoading ?? this.recipientLoading,
-      federationLoading: federationLoading ?? this.federationLoading,
-      federationDomain: federationDomain ?? this.federationDomain,
-      federationSuggestions:
-          federationSuggestions ?? this.federationSuggestions,
       asset: asset ?? this.asset,
       accountId: identical(accountId, _sentinel)
           ? this.accountId
@@ -217,15 +230,6 @@ class SendState {
       destinationHasTrustline: identical(destinationHasTrustline, _sentinel)
           ? this.destinationHasTrustline
           : destinationHasTrustline as bool?,
-      resolvedRecipient: identical(resolvedRecipient, _sentinel)
-          ? this.resolvedRecipient
-          : resolvedRecipient as RecipientAddressModel?,
-      resolvedFederation: identical(resolvedFederation, _sentinel)
-          ? this.resolvedFederation
-          : resolvedFederation as FederationResolveResponse?,
-      federationError: identical(federationError, _sentinel)
-          ? this.federationError
-          : federationError as String?,
       destinationMemoRequired: identical(destinationMemoRequired, _sentinel)
           ? this.destinationMemoRequired
           : destinationMemoRequired as bool?,

@@ -8,6 +8,7 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/core/recipient_input/recipient_flow_controller.dart';
 import 'package:next_fi/core/services/portfolio/models/portfolio_models.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
@@ -15,6 +16,7 @@ import 'package:next_fi/core/widgets/modal/token_chooser.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/portfolio/presentation/screens/portfolio_screen.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
+import 'package:next_fi/features/scanner/presentation/screens/scanner_screen.dart';
 import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
@@ -220,7 +222,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                     loadingBalances: showHeaderLoader,
                     totalFiat: totalFiat,
                     lastBalancesAt: s.lastBalancesAt,
-                    onSwap: _openSwap,
+                    onScan: _openScanner,
                     onSend: () => vm.onSendPressed(),
                     onReceive: () => vm.onReceivePressed(),
                     livePulse: _livePulse,
@@ -382,6 +384,51 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
         trigger: WalletSnapshotTrigger.swap,
       );
     }
+  }
+
+  Future<void> _openScanner() async {
+    if (!mounted) return;
+    final walletVm = ref.read(walletHomeVmProvider);
+    final walletState = walletVm.state;
+    final senderAddress = walletState.address?.trim() ?? '';
+    if (senderAddress.isEmpty) {
+      showFloatingSnackBar(
+        context,
+        message: 'Wallet not loaded yet',
+        type: SnackBarType.warning,
+      );
+      return;
+    }
+
+    final raw = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const ScannerScreen()));
+    if (!mounted || raw == null || raw.trim().isEmpty) return;
+
+    final parsed = RecipientInputParser.parseQr(raw);
+    if (parsed.kind == RecipientValueKind.invalid ||
+        parsed.kind == RecipientValueKind.empty) {
+      showFloatingSnackBar(
+        context,
+        message: 'No valid Stellar recipient found in the QR code',
+        type: SnackBarType.warning,
+      );
+      return;
+    }
+
+    final balance = walletState.balancesByAssetId['stellar'] ?? walletState.xlm;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SendScreen(
+          address: senderAddress,
+          assetId: 'stellar',
+          balance: balance,
+          prefillAddress: raw.trim(),
+          initialRecipientMode: RecipientInputMode.scannedQr,
+          onTransactionCompleted: () => walletVm.refresh(force: true),
+        ),
+      ),
+    );
   }
 
   void _onUiEvent(WalletHomeUiEvent e) async {

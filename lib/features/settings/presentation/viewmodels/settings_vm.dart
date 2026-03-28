@@ -19,6 +19,42 @@ import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_set
 typedef ThemeApplier = FutureOr<void> Function(ThemeMode mode);
 typedef AuthGateSetter = void Function(bool enabled);
 typedef SecurityStateRefresher = Future<void> Function();
+typedef ProtectedAuthGateChallenge =
+    Future<bool> Function(BuildContext context);
+typedef PinSetupPrompt = Future<Object?> Function(BuildContext context);
+
+abstract class SettingsSecurityStore {
+  Future<bool> ensureReady();
+  Future<bool> hasPin();
+  Future<bool> isBiometricsEnabled();
+  Future<void> setBiometricsEnabled(bool enabled);
+  Future<bool> isAuthGateEnabled();
+  Future<void> setAuthGateEnabled(bool enabled);
+}
+
+class SecureSettingsSecurityStore implements SettingsSecurityStore {
+  @override
+  Future<bool> ensureReady() => SecurityStorage.ensureReady();
+
+  @override
+  Future<bool> hasPin() => SecurityStorage.hasPin();
+
+  @override
+  Future<bool> isBiometricsEnabled() => SecurityStorage.isBiometricsEnabled();
+
+  @override
+  Future<void> setBiometricsEnabled(bool enabled) {
+    return SecurityStorage.setBiometricsEnabled(enabled);
+  }
+
+  @override
+  Future<bool> isAuthGateEnabled() => SecurityStorage.isAuthGateEnabled();
+
+  @override
+  Future<void> setAuthGateEnabled(bool enabled) {
+    return SecurityStorage.setAuthGateEnabled(enabled);
+  }
+}
 
 class ThemeBridge {
   static ThemeApplier? apply;
@@ -31,11 +67,24 @@ class ThemeStyleBridge {
 }
 
 class SettingsVM extends ChangeNotifier {
-  SettingsVM({this.onAuthGateChanged, this.onSecurityStateRefresh});
+  SettingsVM({
+    this.onAuthGateChanged,
+    this.onSecurityStateRefresh,
+    LocalAuthentication? localAuth,
+    SettingsSecurityStore? securityStore,
+    ProtectedAuthGateChallenge? protectedAuthGateChallenge,
+    PinSetupPrompt? pinSetupPrompt,
+  }) : _localAuth = localAuth ?? LocalAuthentication(),
+       _securityStore = securityStore ?? SecureSettingsSecurityStore(),
+       _protectedAuthGateChallenge = protectedAuthGateChallenge,
+       _pinSetupPrompt = pinSetupPrompt;
 
-  final LocalAuthentication _localAuth = LocalAuthentication();
+  final LocalAuthentication _localAuth;
+  final SettingsSecurityStore _securityStore;
   final AuthGateSetter? onAuthGateChanged;
   final SecurityStateRefresher? onSecurityStateRefresh;
+  final ProtectedAuthGateChallenge? _protectedAuthGateChallenge;
+  final PinSetupPrompt? _pinSetupPrompt;
 
   static const String _kThemePrefKey = 'pref.theme_mode.v1';
   static const String _kThemeStylePrefKey = 'pref.theme_style_index.v1';
@@ -47,9 +96,13 @@ class SettingsVM extends ChangeNotifier {
   bool _bioSupported = false;
   bool _bioEnabled = false;
   bool _authGateEnabled = true;
+  bool _authGateToggleInProgress = false;
+  bool _biometricsToggleInProgress = false;
   bool get biometricsSupported => _bioSupported;
   bool get biometricsEnabled => _bioEnabled;
   bool get authGateEnabled => _authGateEnabled;
+  bool get authGateToggleInProgress => _authGateToggleInProgress;
+  bool get biometricsToggleInProgress => _biometricsToggleInProgress;
 
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
@@ -61,7 +114,7 @@ class SettingsVM extends ChangeNotifier {
   List<SettingSection> get sections => _sections;
 
   Future<void> initDefaults() async {
-    await SecurityStorage.ensureReady();
+    await _securityStore.ensureReady();
 
     await Future.wait([
       _loadBiometricState(),
@@ -254,7 +307,7 @@ class SettingsVM extends ChangeNotifier {
     }
 
     try {
-      enabled = await SecurityStorage.isBiometricsEnabled();
+      enabled = await _securityStore.isBiometricsEnabled();
     } catch (_) {
       enabled = false;
     }
@@ -265,90 +318,136 @@ class SettingsVM extends ChangeNotifier {
 
   Future<void> _loadAuthGateState() async {
     try {
-      _authGateEnabled = await SecurityStorage.isAuthGateEnabled();
+      _authGateEnabled = await _securityStore.isAuthGateEnabled();
     } catch (_) {
       _authGateEnabled = true;
     }
   }
 
   Future<void> onToggleAuthGate(BuildContext context, bool value) async {
+    if (_authGateToggleInProgress || value == _authGateEnabled) return;
     HapticFeedback.selectionClick();
-
-    if (value) {
-      var hasPin = await SecurityStorage.hasPin();
-      if (!context.mounted) return;
-      if (!hasPin) {
-        await showPinChangeBottomSheet(context);
-        hasPin = await SecurityStorage.hasPin();
-        if (!context.mounted) return;
-      }
-      if (!hasPin) {
-        _showSnack(context, 'Create a PIN first to enable app lock.');
-        await _loadAuthGateState();
-        _syncAppearanceSubtitle();
-        notifyListeners();
-        return;
-      }
-    }
-
-    await SecurityStorage.setAuthGateEnabled(value);
-    _authGateEnabled = value;
-    _syncAppearanceSubtitle();
+    _authGateToggleInProgress = true;
     notifyListeners();
-    onAuthGateChanged?.call(value);
-    await onSecurityStateRefresh?.call();
 
-    if (!context.mounted) return;
-    _showSnack(context, value ? 'App lock enabled.' : 'App lock disabled.');
+    try {
+      if (value) {
+        var hasPin = await _securityStore.hasPin();
+        if (!context.mounted) return;
+        if (!hasPin) {
+          final prompt = _pinSetupPrompt ?? showPinChangeBottomSheet;
+          await prompt(context);
+          hasPin = await _securityStore.hasPin();
+          if (!context.mounted) return;
+        }
+        if (!hasPin) {
+          _showSnack(context, 'Create a PIN first to enable app lock.');
+          await _loadAuthGateState();
+          _syncAppearanceSubtitle();
+          notifyListeners();
+          return;
+        }
+      } else {
+        final didAuthenticate = await _runProtectedAuthGate(context);
+        if (!context.mounted || !didAuthenticate) {
+          await _loadAuthGateState();
+          _syncAppearanceSubtitle();
+          notifyListeners();
+          if (context.mounted) {
+            _showSnack(context, 'App lock remains enabled.');
+          }
+          return;
+        }
+      }
+
+      await _securityStore.setAuthGateEnabled(value);
+      await _loadAuthGateState();
+      _syncAppearanceSubtitle();
+      notifyListeners();
+      onAuthGateChanged?.call(_authGateEnabled);
+      await onSecurityStateRefresh?.call();
+
+      if (!context.mounted) return;
+      _showSnack(
+        context,
+        _authGateEnabled ? 'App lock enabled.' : 'App lock disabled.',
+      );
+    } finally {
+      _authGateToggleInProgress = false;
+      notifyListeners();
+    }
   }
 
   Future<void> onToggleBiometrics(BuildContext context, bool value) async {
+    if (_biometricsToggleInProgress || value == _bioEnabled) return;
     HapticFeedback.selectionClick();
+    _biometricsToggleInProgress = true;
+    notifyListeners();
     await _loadBiometricState();
-    if (!context.mounted) return;
-
-    if (!_bioSupported) {
-      _showSnack(context, 'Biometric unlock is not available on this device.');
-      notifyListeners();
-      return;
-    }
-
-    if (value) {
-      final hasPin = await SecurityStorage.hasPin();
+    try {
       if (!context.mounted) return;
-      if (!hasPin) {
-        _showSnack(context, 'Set a 6-digit PIN first in Security.');
+
+      if (!_bioSupported) {
+        _showSnack(
+          context,
+          'Biometric unlock is not available on this device.',
+        );
         notifyListeners();
         return;
       }
 
-      final success = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => AuthGateScreen(
-            goNext: () async {
-              await SecurityStorage.setBiometricsEnabled(true);
-              if (!context.mounted) return;
-              _bioEnabled = true;
-              _syncAppearanceSubtitle();
-              notifyListeners();
-              _showSnack(context, 'Biometric unlock enabled.');
-              Navigator.of(context).pop(true);
-            },
-          ),
-        ),
-      );
+      if (value) {
+        final hasPin = await _securityStore.hasPin();
+        if (!context.mounted) return;
+        if (!hasPin) {
+          _showSnack(context, 'Set a 6-digit PIN first in Security.');
+          notifyListeners();
+          return;
+        }
 
-      if (success != true) {
+        final success = await _runProtectedAuthGate(context);
+        if (!context.mounted || !success) {
+          notifyListeners();
+          return;
+        }
+
+        await _securityStore.setBiometricsEnabled(true);
+        if (!context.mounted) return;
+        _bioEnabled = true;
+        _syncAppearanceSubtitle();
         notifyListeners();
+        _showSnack(context, 'Biometric unlock enabled.');
+      } else {
+        await _securityStore.setBiometricsEnabled(false);
+        if (!context.mounted) return;
+        _bioEnabled = false;
+        _syncAppearanceSubtitle();
+        notifyListeners();
+        _showSnack(context, 'Biometric unlock disabled.');
       }
-    } else {
-      await SecurityStorage.setBiometricsEnabled(false);
-      if (!context.mounted) return;
-      _bioEnabled = false;
-      _syncAppearanceSubtitle();
+    } finally {
+      _biometricsToggleInProgress = false;
       notifyListeners();
-      _showSnack(context, 'Biometric unlock disabled.');
     }
+  }
+
+  Future<bool> _runProtectedAuthGate(BuildContext context) async {
+    final customChallenge = _protectedAuthGateChallenge;
+    if (customChallenge != null) {
+      return customChallenge(context);
+    }
+
+    final success = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AuthGateScreen(
+          goNext: () {
+            if (!context.mounted) return;
+            Navigator.of(context).pop(true);
+          },
+        ),
+      ),
+    );
+    return success == true;
   }
 
   void setSections(List<SettingSection> sections) {

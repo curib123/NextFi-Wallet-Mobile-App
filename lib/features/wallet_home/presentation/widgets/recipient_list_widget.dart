@@ -432,6 +432,7 @@ class _RecipientList extends StatelessWidget {
                   balance: balance,
                   prefillAddress: r.address,
                   prefillName: r.name,
+                  prefillRecipient: r,
                   onTransactionCompleted: () async {
                     await ProviderScope.containerOf(
                       context,

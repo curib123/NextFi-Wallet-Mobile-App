@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/core/recipient_input/recipient_flow_controller.dart';
 import 'package:next_fi/core/services/assets/asset_stellar_helper.dart';
+import 'package:next_fi/features/contact/data/models/recipient_address_model.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_notifier.dart';
 import 'package:next_fi/features/send/presentation/viewmodels/send_state.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
@@ -29,7 +31,8 @@ class SendController extends Notifier<SendState> {
   final SendControllerArgs args;
   StreamSubscription? _feeSub;
   Timer? _debounce;
-  int _federationResolveSeq = 0;
+  RecipientFlowController? _recipientFlow;
+  int _trustlineCheckSeq = 0;
 
   @override
   SendState build() {
@@ -42,6 +45,16 @@ class SendController extends Notifier<SendState> {
       args,
       ref.read(sendFederationDomainProvider),
       asset,
+    );
+    _recipientFlow = RecipientFlowController(
+      initialState: initial.recipient,
+      lookupRecipient: _lookupRecipientMatch,
+      resolveFederation: (String federationAddress, {required String domain}) {
+        return ref
+            .read(sendFederationAddressServiceProvider)
+            .resolveByName(federationAddress, domain: domain);
+      },
+      onStateChanged: _onRecipientStateChanged,
     );
     Future.microtask(_start);
     return initial;
@@ -68,9 +81,7 @@ class SendController extends Notifier<SendState> {
         loading: false,
         error: null,
       );
-      if (state.recipientInput.isNotEmpty) {
-        await onRecipientInputChanged(state.recipientInput);
-      }
+      await _recipientFlow?.initialize();
     } catch (_) {
       state = state.copyWith(loading: false, error: 'No wallet found.');
     }
@@ -90,64 +101,33 @@ class SendController extends Notifier<SendState> {
     state = state.copyWith(estNetworkFeeXlm: fee);
   }
 
-  Future<void> onRecipientInputChanged(String rawInput) async {
-    final input = rawInput.trim();
-    final suggestions = _buildFederationSuggestions(input);
-    state = state.copyWith(
-      recipientInput: input,
-      destinationAddress: _looksLikeStellarPk(input) ? input : '',
-      resolvedRecipient: _looksLikeStellarPk(input)
-          ? state.resolvedRecipient
-          : null,
-      resolvedFederation: null,
-      federationError: null,
-      federationSuggestions: suggestions,
-      recipientLoading: false,
-      federationLoading: false,
-      merchantProfile: null,
-    );
-
-    if (input.isEmpty) {
-      state = state.copyWith(
-        destinationAddress: '',
-        resolvedRecipient: null,
-        resolvedFederation: null,
-        federationError: null,
-        destinationHasTrustline: null,
-        merchantProfile: null,
-      );
-      return;
-    }
-
-    if (_looksLikeStellarPk(input)) {
-      await _lookupRecipient(input);
-      _debounceCheckTrustline();
-      return;
-    }
-
-    if (_looksLikeFederation(input)) {
-      await _resolveFederation(input);
-      return;
-    }
-
-    _debounceCheckTrustline();
+  Future<void> refreshRecipientState() async {
+    await _recipientFlow?.initialize();
   }
 
-  void applyPickedRecipient(String address, {String? displayName}) {
-    final trimmed = address.trim();
-    if (trimmed.isEmpty) return;
-    state = state.copyWith(
-      recipientInput: trimmed,
-      destinationAddress: trimmed,
-      prefillName: displayName?.trim().isEmpty == true
-          ? null
-          : displayName?.trim(),
-      resolvedFederation: null,
-      federationError: null,
-      federationSuggestions: _buildFederationSuggestions(trimmed),
-    );
-    unawaited(_lookupRecipient(trimmed));
-    _debounceCheckTrustline();
+  Future<void> setRecipientMode(RecipientInputMode mode) async {
+    await _recipientFlow?.switchMode(mode);
+  }
+
+  Future<void> setManualPublicAddress(String value) async {
+    await _recipientFlow?.setManualPublicAddress(value);
+  }
+
+  Future<void> setFederationInput(String value) async {
+    await _recipientFlow?.setFederationInput(value);
+  }
+
+  Future<void> selectSavedRecipient(RecipientAddressModel? recipient) async {
+    state = state.copyWith(prefillName: recipient?.name ?? state.prefillName);
+    await _recipientFlow?.selectSavedRecipient(recipient);
+  }
+
+  Future<void> applyScannedValue(String rawValue) async {
+    await _recipientFlow?.setScannedValue(rawValue);
+  }
+
+  Future<void> clearFederationSelection() async {
+    await _recipientFlow?.clearFederationSelection();
   }
 
   Future<String> submit() async {
@@ -222,71 +202,12 @@ class SendController extends Notifier<SendState> {
     }
   }
 
-  List<String> _buildFederationSuggestions(String input) {
-    final domain = state.federationDomain.trim();
-    if (domain.isEmpty ||
-        input.isEmpty ||
-        input.contains('*') ||
-        !_looksLikeFederationAliasInput(input)) {
-      return const [];
-    }
-    return ['${input.toLowerCase()}*$domain'];
-  }
-
-  Future<void> _resolveFederation(String federationAddress) async {
-    final requestId = ++_federationResolveSeq;
-    state = state.copyWith(
-      federationLoading: true,
-      federationError: null,
-      resolvedFederation: null,
-      recipientLoading: true,
-      resolvedRecipient: null,
-      destinationAddress: '',
-      destinationHasTrustline: null,
-      merchantProfile: null,
-    );
-
-    try {
-      final resolved = await ref
-          .read(sendFederationAddressServiceProvider)
-          .resolveByName(federationAddress, domain: state.federationDomain);
-      if (requestId != _federationResolveSeq) return;
-      final accountId = resolved.accountId.trim();
-      if (accountId.isEmpty || !_looksLikeStellarPk(accountId)) {
-        throw StateError('Resolved federation has no valid Stellar account id');
-      }
-      state = state.copyWith(
-        resolvedFederation: resolved,
-        destinationAddress: accountId,
-        federationLoading: false,
-      );
-      await _lookupRecipient(accountId);
-      _debounceCheckTrustline();
-    } catch (_) {
-      if (requestId != _federationResolveSeq) return;
-      state = state.copyWith(
-        federationLoading: false,
-        recipientLoading: false,
-        resolvedFederation: null,
-        destinationAddress: '',
-        federationError: 'Federation not found or unavailable.',
-        merchantProfile: null,
-      );
-    }
-  }
-
-  Future<void> _lookupRecipient(String address) async {
-    state = state.copyWith(recipientLoading: true, resolvedRecipient: null);
+  Future<RecipientAddressModel?> _lookupRecipientMatch(String address) async {
     try {
       await ref.read(contactListProvider.notifier).ensureLoaded();
-      final match = ref.read(contactListProvider).byAddress(address);
-      state = state.copyWith(
-        resolvedRecipient: match,
-        recipientLoading: false,
-        prefillName: match?.name ?? state.prefillName,
-      );
+      return ref.read(contactListProvider).byAddress(address);
     } catch (_) {
-      state = state.copyWith(recipientLoading: false);
+      return null;
     }
   }
 
@@ -322,15 +243,21 @@ class SendController extends Notifier<SendState> {
 
   void _debounceCheckTrustline() {
     _debounce?.cancel();
+    final requestId = ++_trustlineCheckSeq;
+    final destination = state.destinationAddress.trim();
     _debounce = Timer(
       const Duration(milliseconds: 300),
-      _checkTrustlineIfNeeded,
+      () => _checkTrustlineIfNeeded(requestId, destination),
     );
   }
 
-  Future<void> _checkTrustlineIfNeeded() async {
-    final destination = state.destinationAddress.trim();
-    if (!_looksLikeStellarPk(destination) || !state.requiresTrustline) {
+  Future<void> _checkTrustlineIfNeeded(
+    int requestId,
+    String destination,
+  ) async {
+    if (requestId != _trustlineCheckSeq) return;
+    if (!RecipientInputParser.isStellarPublicAddress(destination) ||
+        !state.requiresTrustline) {
       state = state.copyWith(destinationHasTrustline: null, checking: false);
       return;
     }
@@ -340,23 +267,33 @@ class SendController extends Notifier<SendState> {
         destination,
         AssetStellarHelper.toStellarAsset(state.asset),
       );
+      if (requestId != _trustlineCheckSeq) return;
       state = state.copyWith(
         checking: false,
         destinationHasTrustline: hasTrustline,
       );
     } catch (_) {
+      if (requestId != _trustlineCheckSeq) return;
       state = state.copyWith(checking: false, destinationHasTrustline: null);
     }
   }
 
-  bool _looksLikeStellarPk(String value) =>
-      value.isNotEmpty && value.startsWith('G') && value.length == 56;
-
-  bool _looksLikeFederation(String value) =>
-      RegExp(r'^[^*\s]+\*[^*\s]+$').hasMatch(value);
-
-  bool _looksLikeFederationAliasInput(String value) =>
-      RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(value);
+  void _onRecipientStateChanged(RecipientInputState recipientState) {
+    final previousDestination = state.recipient.finalDestinationAddress;
+    final nextDestination = recipientState.finalDestinationAddress;
+    state = state.copyWith(
+      recipient: recipientState,
+      destinationHasTrustline: previousDestination == nextDestination
+          ? state.destinationHasTrustline
+          : null,
+      merchantProfile: previousDestination == nextDestination
+          ? state.merchantProfile
+          : null,
+    );
+    if (previousDestination != nextDestination) {
+      _debounceCheckTrustline();
+    }
+  }
 
   double _floor7(double value) => (value * 1e7).floor() / 1e7;
 }

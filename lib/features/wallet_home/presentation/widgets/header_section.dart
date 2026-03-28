@@ -17,7 +17,7 @@ class HeaderSection extends StatefulWidget {
     required this.loadingBalances,
     required this.totalFiat,
     required this.lastBalancesAt,
-    required this.onSwap,
+    required this.onScan,
     required this.onSend,
     required this.onReceive,
     required this.livePulse,
@@ -35,7 +35,7 @@ class HeaderSection extends StatefulWidget {
   final bool loadingBalances;
   final double totalFiat;
   final DateTime? lastBalancesAt;
-  final VoidCallback onSwap;
+  final VoidCallback onScan;
   final VoidCallback onSend;
   final VoidCallback onReceive;
   final AnimationController livePulse;
@@ -198,7 +198,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                           _HeaderIconButton(
                             colors: widget.colors,
                             icon: LucideIcons.scanLine,
-                            onTap: widget.onSwap,
+                            onTap: widget.onScan,
                           ),
                           if (hasChartData) ...[
                             const SizedBox(width: 8),
@@ -311,8 +311,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                 child: _ActionTile(
                   colors: widget.colors,
                   icon: LucideIcons.scanLine,
-                  label: 'Swap',
-                  onTap: widget.onSwap,
+                  label: 'Scan',
+                  onTap: widget.onScan,
                 ),
               ),
             ],

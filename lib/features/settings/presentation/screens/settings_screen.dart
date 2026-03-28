@@ -74,7 +74,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                       if (it.action == SettingAction.biometrics) {
                         final isSwitchEnabled =
-                            it.enabled && vm.biometricsSupported;
+                            it.enabled &&
+                            vm.biometricsSupported &&
+                            !vm.biometricsToggleInProgress;
                         return Switch.adaptive(
                           value: vm.biometricsEnabled,
                           onChanged: isSwitchEnabled
@@ -86,7 +88,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (it.action == SettingAction.authGate) {
                         return Switch.adaptive(
                           value: vm.authGateEnabled,
-                          onChanged: (val) => vm.onToggleAuthGate(context, val),
+                          onChanged: vm.authGateToggleInProgress
+                              ? null
+                              : (val) => vm.onToggleAuthGate(context, val),
                         );
                       }
 

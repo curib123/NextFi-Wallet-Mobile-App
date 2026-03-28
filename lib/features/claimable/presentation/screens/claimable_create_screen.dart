@@ -8,6 +8,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/recipient_input/recipient_flow_controller.dart';
 import 'package:next_fi/core/widgets/asset/asset_logo.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/modal/recipient_upsert_sheet.dart';
@@ -18,7 +19,6 @@ import 'package:next_fi/features/contact/data/models/recipient_address_model.dar
 import 'package:next_fi/features/wallet_home/presentation/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/scanner/presentation/screens/scanner_screen.dart';
 import 'package:next_fi/core/services/federation_address/federation_address_core_service.dart';
-import 'package:next_fi/core/services/federation_address/models/federation_address_models.dart';
 
 class ClaimableCreateScreen extends ConsumerStatefulWidget {
   final String initialAsset;
@@ -32,7 +32,8 @@ class ClaimableCreateScreen extends ConsumerStatefulWidget {
 
 class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   final _form = GlobalKey<FormState>();
-  final _recipientCtl = TextEditingController();
+  final _publicAddressCtl = TextEditingController();
+  final _federationCtl = TextEditingController();
   final _amountCtl = TextEditingController();
 
   late String _selectedAsset;
@@ -46,14 +47,9 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   DateTime? _expiryDate;
   TimeOfDay? _expiryTime;
 
-  bool _recipientLoading = false;
-  RecipientAddressModel? _resolvedRecipient;
-  bool _federationLoading = false;
-  FederationResolveResponse? _resolvedFederation;
-  String? _federationError;
-  int _federationResolveSeq = 0;
+  late final RecipientFlowController _recipientFlow;
+  late RecipientInputState _recipientState;
   final String _federationDomain = FederationAddressCoreService.defaultDomain;
-  List<String> _federationSuggestions = const [];
 
   static final _dateFmt = DateFormat('MMM d, yyyy');
 
@@ -61,167 +57,58 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   void initState() {
     super.initState();
     _selectedAsset = widget.initialAsset;
-    _recipientCtl.addListener(_onRecipientChanged);
+    _recipientState = RecipientInputState.initial(
+      federationDomain: _federationDomain,
+    );
+    _recipientFlow = RecipientFlowController(
+      initialState: _recipientState,
+      lookupRecipient: _lookupRecipientMatch,
+      resolveFederation: (String federationAddress, {required String domain}) {
+        return FederationAddressCoreService.I.resolveByName(
+          federationAddress,
+          domain: domain,
+        );
+      },
+      onStateChanged: (RecipientInputState state) {
+        if (!mounted) return;
+        setState(() => _recipientState = state);
+      },
+    );
+    _publicAddressCtl.addListener(() {
+      _recipientFlow.setManualPublicAddress(_publicAddressCtl.text);
+    });
+    _federationCtl.addListener(() {
+      _recipientFlow.setFederationInput(_federationCtl.text);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _recipientFlow.initialize();
+    });
   }
 
   @override
   void dispose() {
-    _recipientCtl.removeListener(_onRecipientChanged);
-    _recipientCtl.dispose();
+    _publicAddressCtl.dispose();
+    _federationCtl.dispose();
     _amountCtl.dispose();
     super.dispose();
   }
 
-  bool _looksLikeStellarPk(String x) => RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
-  bool _looksLikeFederation(String x) =>
-      RegExp(r'^[^*\s]+\*[^*\s]+$').hasMatch(x);
-  bool _looksLikeFederationAliasInput(String x) =>
-      RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(x);
-
-  void _onRecipientChanged() {
-    final addr = _recipientCtl.text.trim();
-
-    if (addr.isEmpty) {
-      setState(() {
-        _resolvedRecipient = null;
-        _recipientLoading = false;
-        _resolvedFederation = null;
-        _federationError = null;
-        _federationLoading = false;
-        _federationSuggestions = const [];
-      });
-      return;
-    }
-
-    if (_looksLikeStellarPk(addr)) {
-      setState(() {
-        _resolvedFederation = null;
-        _federationError = null;
-        _federationLoading = false;
-        _federationSuggestions = const [];
-      });
-      _lookupRecipient(addr);
-      return;
-    }
-
-    if (_looksLikeFederation(addr)) {
-      setState(() {
-        _resolvedRecipient = null;
-        _federationSuggestions = const [];
-      });
-      _resolveFederation(addr);
-      return;
-    }
-
-    _updateFederationSuggestions(addr);
-    setState(() {
-      _resolvedRecipient = null;
-      _recipientLoading = false;
-      _resolvedFederation = null;
-      _federationError = null;
-      _federationLoading = false;
-    });
-  }
-
-  Future<void> _lookupRecipient(String address) async {
-    setState(() {
-      _recipientLoading = true;
-      _resolvedRecipient = null;
-    });
-
-    try {
-      final container = ProviderScope.containerOf(context, listen: false);
-      final notifier = container.read(contactListProvider.notifier);
-      await notifier.ensureLoaded();
-      final match = container.read(contactListProvider).byAddress(address);
-
-      if (mounted) {
-        setState(() {
-          _resolvedRecipient = match;
-          _recipientLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _recipientLoading = false);
-      }
-    }
-  }
-
-  Future<void> _resolveFederation(String federationAddress) async {
-    final requestId = ++_federationResolveSeq;
-
-    setState(() {
-      _federationLoading = true;
-      _federationError = null;
-      _resolvedFederation = null;
-      _recipientLoading = true;
-      _resolvedRecipient = null;
-    });
-
-    try {
-      final resolved = await FederationAddressCoreService.I.resolveByName(
-        federationAddress,
-        domain: _federationDomain,
-      );
-      if (!mounted || requestId != _federationResolveSeq) return;
-
-      final accountId = resolved.accountId.trim();
-      if (accountId.isEmpty || !_looksLikeStellarPk(accountId)) {
-        throw StateError('Resolved federation has no valid Stellar account id');
-      }
-
-      setState(() {
-        _resolvedFederation = resolved;
-        _federationLoading = false;
-      });
-      await _lookupRecipient(accountId);
-    } catch (_) {
-      if (!mounted || requestId != _federationResolveSeq) return;
-      setState(() {
-        _federationLoading = false;
-        _recipientLoading = false;
-        _resolvedFederation = null;
-        _federationError = 'Federation not found or unavailable.';
-      });
-    }
-  }
-
-  void _updateFederationSuggestions(String input) {
-    final domain = _federationDomain.trim();
-    if (domain.isEmpty ||
-        input.isEmpty ||
-        input.contains('*') ||
-        !_looksLikeFederationAliasInput(input)) {
-      if (_federationSuggestions.isNotEmpty) {
-        setState(() => _federationSuggestions = const []);
-      }
-      return;
-    }
-
-    final candidate = '${input.toLowerCase()}*$domain';
-    if (_federationSuggestions.length == 1 &&
-        _federationSuggestions.first == candidate) {
-      return;
-    }
-    setState(() => _federationSuggestions = [candidate]);
-  }
-
   void _applyFederationSuggestion(String value) {
-    _recipientCtl.text = value;
-    _recipientCtl.selection = TextSelection.fromPosition(
-      TextPosition(offset: _recipientCtl.text.length),
+    _federationCtl.text = value;
+    _federationCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _federationCtl.text.length),
     );
   }
 
-  String? _resolvedRecipientAddressForSubmit() {
-    final input = _recipientCtl.text.trim();
-    if (_looksLikeStellarPk(input)) return input;
-    if (_looksLikeFederation(input)) {
-      final resolved = _resolvedFederation?.accountId.trim();
-      if (resolved != null && _looksLikeStellarPk(resolved)) return resolved;
+  Future<RecipientAddressModel?> _lookupRecipientMatch(String address) async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    try {
+      final notifier = container.read(contactListProvider.notifier);
+      await notifier.ensureLoaded();
+      return container.read(contactListProvider).byAddress(address);
+    } catch (_) {
+      return null;
     }
-    return null;
   }
 
   Future<void> _pickUnlockDate() async {
@@ -290,9 +177,9 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   String? _validate() {
-    final addr = _resolvedRecipientAddressForSubmit();
+    final addr = _recipientState.finalDestinationAddress;
     if (addr == null) {
-      return 'Enter a valid Stellar address or federation address.';
+      return 'Select or enter a valid recipient destination.';
     }
 
     final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
@@ -351,7 +238,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
 
     try {
       final vm = ref.read(claimableVmProvider);
-      final addr = _resolvedRecipientAddressForSubmit();
+      final addr = _recipientState.finalDestinationAddress;
       if (addr == null) {
         throw StateError('Recipient must resolve to a valid Stellar account.');
       }
@@ -409,8 +296,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       MaterialPageRoute(builder: (_) => const ScannerScreen()),
     );
     if (result != null && mounted) {
-      _recipientCtl.text = result;
-      _onRecipientChanged();
+      await _recipientFlow.setScannedValue(result);
     }
   }
 
@@ -428,25 +314,24 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       ),
     );
     if (selected != null && mounted) {
-      _recipientCtl.text = selected.address;
-      setState(() {
-        _resolvedRecipient = selected;
-        _resolvedFederation = null;
-        _federationError = null;
-        _federationLoading = false;
-        _federationSuggestions = const [];
-      });
+      await _recipientFlow.selectSavedRecipient(selected);
     }
   }
 
   Future<void> _editRecipient() async {
-    if (_resolvedRecipient == null) return;
-    final saved = await showRecipientUpsertSheet(
-      context,
-      initial: _resolvedRecipient,
-    );
+    final recipient = _recipientState.activeRecipient;
+    if (recipient == null) return;
+    final saved = await showRecipientUpsertSheet(context, initial: recipient);
     if (saved == true && mounted) {
-      _lookupRecipient(_recipientCtl.text.trim());
+      await ref.read(contactListProvider.notifier).refresh();
+      if (_recipientState.mode == RecipientInputMode.savedRecipient) {
+        final updated = ref
+            .read(contactListProvider)
+            .byAddress(recipient.address.trim());
+        await _recipientFlow.selectSavedRecipient(updated ?? recipient);
+      } else {
+        await _recipientFlow.initialize();
+      }
     }
   }
 
@@ -477,48 +362,30 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                   padding: const EdgeInsets.fromLTRB(22, 10, 22, 28),
                   children: [
                     const SizedBox(height: 8),
-                    _buildSectionIntro(
-                      c,
-                      title: 'Mode',
-                    ),
+                    _buildSectionIntro(c, title: 'Mode'),
                     const SizedBox(height: 10),
                     _buildModeCard(c),
                     const SizedBox(height: 18),
-                    _buildSectionIntro(
-                      c,
-                      title: 'Amount',
-                    ),
+                    _buildSectionIntro(c, title: 'Amount'),
                     const SizedBox(height: 10),
                     _buildAmountCard(c, currentBal),
                     const SizedBox(height: 18),
-                    _buildSectionIntro(
-                      c,
-                      title: 'Recipient',
-                    ),
+                    _buildSectionIntro(c, title: 'Recipient'),
                     const SizedBox(height: 10),
                     _buildRecipientCard(c),
                     if (_mode == ClaimableMode.timeLocked) ...[
                       const SizedBox(height: 18),
-                      _buildSectionIntro(
-                        c,
-                        title: 'Unlock',
-                      ),
+                      _buildSectionIntro(c, title: 'Unlock'),
                       const SizedBox(height: 10),
                       _buildUnlockCard(c),
                     ],
                     const SizedBox(height: 18),
-                    _buildSectionIntro(
-                      c,
-                      title: 'Expiry',
-                    ),
+                    _buildSectionIntro(c, title: 'Expiry'),
                     const SizedBox(height: 10),
                     _buildExpirationCard(c),
                     if (_mode == ClaimableMode.timeLocked || _hasExpiry) ...[
                       const SizedBox(height: 18),
-                      _buildSectionIntro(
-                        c,
-                        title: 'Rules',
-                      ),
+                      _buildSectionIntro(c, title: 'Rules'),
                       const SizedBox(height: 10),
                       _buildInfoCard(c),
                     ],
@@ -539,7 +406,9 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       padding: const EdgeInsets.fromLTRB(14, 10, 22, 14),
       decoration: BoxDecoration(
         color: c.surface,
-        border: Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.8), width: 1)),
+        border: Border(
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.8), width: 1),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -582,10 +451,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildSectionIntro(
-    AppColor c, {
-    required String title,
-  }) {
+  Widget _buildSectionIntro(AppColor c, {required String title}) {
     return Text(
       title,
       style: TextStyle(
@@ -833,19 +699,12 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildRecipientCard(AppColor c) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final addr = _recipientCtl.text.trim();
-    final resolvedAccountId = _resolvedFederation?.accountId.trim();
-    final hasValidAddr =
-        _looksLikeStellarPk(addr) ||
-        (_looksLikeFederation(addr) &&
-            resolvedAccountId != null &&
-            _looksLikeStellarPk(resolvedAccountId));
-    final hasFederationInput = _looksLikeFederation(addr);
-    final recipientLookupAddress = _looksLikeStellarPk(addr)
-        ? addr
-        : (resolvedAccountId ?? addr);
-    final isLoadingRecipient = _recipientLoading || _federationLoading;
+    final hasValidDestination =
+        _recipientState.finalDestinationAddress != null &&
+        RecipientInputParser.isStellarPublicAddress(
+          _recipientState.finalDestinationAddress!,
+        );
+    final activeRecipient = _recipientState.activeRecipient;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -884,23 +743,98 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (isLoadingRecipient)
-            _buildRecipientLoadingState(c)
-          else if (hasValidAddr && _resolvedRecipient != null)
-            _buildSavedRecipientChip(c, _resolvedRecipient!)
-          else if (hasValidAddr && _resolvedRecipient == null)
-            _buildNewRecipientChip(c, recipientLookupAddress)
+          _buildRecipientModeSelector(c),
+          const SizedBox(height: 16),
+          if (_recipientState.mode == RecipientInputMode.savedRecipient)
+            _buildSavedRecipientPanel(c)
+          else if (_recipientState.mode == RecipientInputMode.scannedQr)
+            _buildScannedRecipientPanel(c, activeRecipient, hasValidDestination)
+          else if (_recipientState.mode == RecipientInputMode.publicAddress)
+            _buildPublicAddressPanel(c, activeRecipient, hasValidDestination)
           else
-            _buildRecipientInputField(c, addr, isDark),
-          if (_federationSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _buildFederationSuggestions(c),
-          ],
-          if (hasFederationInput) ...[
-            const SizedBox(height: 10),
-            _buildFederationStatus(c),
-          ],
+            _buildFederationPanel(c, activeRecipient, hasValidDestination),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecipientModeSelector(AppColor c) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _buildRecipientModeChip(
+          c,
+          label: 'Saved',
+          icon: LucideIcons.users,
+          selected: _recipientState.mode == RecipientInputMode.savedRecipient,
+          onTap: () =>
+              _recipientFlow.switchMode(RecipientInputMode.savedRecipient),
+        ),
+        _buildRecipientModeChip(
+          c,
+          label: 'Scan',
+          icon: LucideIcons.qrCode,
+          selected: _recipientState.mode == RecipientInputMode.scannedQr,
+          onTap: () async {
+            await _recipientFlow.switchMode(RecipientInputMode.scannedQr);
+            await _scanQR();
+          },
+        ),
+        _buildRecipientModeChip(
+          c,
+          label: 'Address',
+          icon: LucideIcons.wallet,
+          selected: _recipientState.mode == RecipientInputMode.publicAddress,
+          onTap: () =>
+              _recipientFlow.switchMode(RecipientInputMode.publicAddress),
+        ),
+        _buildRecipientModeChip(
+          c,
+          label: 'Federation',
+          icon: LucideIcons.atSign,
+          selected: _recipientState.mode == RecipientInputMode.federation,
+          onTap: () => _recipientFlow.switchMode(RecipientInputMode.federation),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecipientModeChip(
+    AppColor c, {
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? _blend(c.surface, c.primary, 0.14) : c.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? c.primary : c.border,
+            width: selected ? 1.2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: selected ? c.primary : c.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? c.primary : c.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -926,6 +860,11 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     );
   }
 
+  bool _isRecipientBusy() {
+    return _recipientState.recipientLoading ||
+        _recipientState.federationLoading;
+  }
+
   Widget _buildRecipientLoadingState(AppColor c) {
     return Container(
       height: 56,
@@ -940,6 +879,227 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
           width: 20,
           child: CircularProgressIndicator(strokeWidth: 2.5, color: c.primary),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSavedRecipientPanel(AppColor c) {
+    final recipient = _recipientState.savedRecipient;
+    if (recipient == null) {
+      return _buildRecipientPickerEmptyState(
+        c,
+        title: 'Choose a saved recipient',
+        subtitle: 'Select from your saved list to create a claimable balance.',
+        buttonLabel: 'Open recipient list',
+        icon: LucideIcons.users,
+        onTap: _selectRecipient,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSavedRecipientChip(c, recipient),
+        const SizedBox(height: 10),
+        TextButton.icon(
+          onPressed: _selectRecipient,
+          icon: const Icon(LucideIcons.repeat2, size: 16),
+          label: const Text('Replace recipient'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScannedRecipientPanel(
+    AppColor c,
+    RecipientAddressModel? activeRecipient,
+    bool hasValidDestination,
+  ) {
+    final payload = _recipientState.scannedPayload;
+    final destination = _recipientState.finalDestinationAddress;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: c.border, width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                payload.rawValue.isEmpty
+                    ? 'No QR scanned yet'
+                    : 'Scanned value',
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                payload.rawValue.isEmpty
+                    ? 'Scan a public Stellar address or federation QR code.'
+                    : payload.rawValue,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  fontFeatures: const [ui.FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _scanQR,
+                icon: const Icon(LucideIcons.scanLine, size: 16),
+                label: const Text('Scan again'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _recipientFlow.setScannedValue(''),
+                icon: const Icon(LucideIcons.x, size: 16),
+                label: const Text('Clear'),
+              ),
+            ),
+          ],
+        ),
+        if (_recipientState.shouldShowFederationUi) ...[
+          const SizedBox(height: 10),
+          _buildFederationStatus(c),
+        ],
+        if (_isRecipientBusy()) ...[
+          const SizedBox(height: 10),
+          _buildRecipientLoadingState(c),
+        ] else if (hasValidDestination && activeRecipient != null) ...[
+          const SizedBox(height: 10),
+          _buildSavedRecipientChip(c, activeRecipient),
+        ] else if (hasValidDestination && activeRecipient == null) ...[
+          const SizedBox(height: 10),
+          _buildNewRecipientChip(c, destination!),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPublicAddressPanel(
+    AppColor c,
+    RecipientAddressModel? activeRecipient,
+    bool hasValidDestination,
+  ) {
+    final destination = _recipientState.finalDestinationAddress;
+    final currentValue = _publicAddressCtl.text.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildPublicAddressInputField(c, currentValue),
+        if (_isRecipientBusy()) ...[
+          const SizedBox(height: 10),
+          _buildRecipientLoadingState(c),
+        ] else if (hasValidDestination && activeRecipient != null) ...[
+          const SizedBox(height: 10),
+          _buildSavedRecipientChip(c, activeRecipient),
+        ] else if (hasValidDestination && activeRecipient == null) ...[
+          const SizedBox(height: 10),
+          _buildNewRecipientChip(c, destination!),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFederationPanel(
+    AppColor c,
+    RecipientAddressModel? activeRecipient,
+    bool hasValidDestination,
+  ) {
+    final destination = _recipientState.finalDestinationAddress;
+    final currentValue = _federationCtl.text.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFederationInputField(c, currentValue),
+        if (_recipientState.federationSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _buildFederationSuggestions(c),
+        ],
+        if (currentValue.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _buildFederationStatus(c),
+        ],
+        if (_isRecipientBusy()) ...[
+          const SizedBox(height: 10),
+          _buildRecipientLoadingState(c),
+        ] else if (hasValidDestination && activeRecipient != null) ...[
+          const SizedBox(height: 10),
+          _buildSavedRecipientChip(c, activeRecipient),
+        ] else if (hasValidDestination && activeRecipient == null) ...[
+          const SizedBox(height: 10),
+          _buildNewRecipientChip(c, destination!),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildRecipientPickerEmptyState(
+    AppColor c, {
+    required String title,
+    required String subtitle,
+    required String buttonLabel,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: c.primary),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon, size: 16, color: c.primary),
+            label: Text(buttonLabel),
+          ),
+        ],
       ),
     );
   }
@@ -1076,7 +1236,10 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                 context,
                 address: addr,
               );
-              if (saved == true && mounted) _lookupRecipient(addr);
+              if (saved == true && mounted) {
+                await ref.read(contactListProvider.notifier).refresh();
+                await _recipientFlow.initialize();
+              }
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1100,14 +1263,15 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildRecipientInputField(AppColor c, String addr, bool isDark) {
+  Widget _buildPublicAddressInputField(AppColor c, String addr) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
         color: isDark ? c.background : c.surface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: TextField(
-        controller: _recipientCtl,
+        controller: _publicAddressCtl,
         textInputAction: TextInputAction.next,
         keyboardType: TextInputType.multiline,
         minLines: 1,
@@ -1120,7 +1284,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Paste G... or alias*$_federationDomain',
+          hintText: 'Paste a Stellar public address (G...)',
           hintStyle: TextStyle(
             color: c.textSecondary,
             fontSize: 14,
@@ -1136,14 +1300,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
                   padding: const EdgeInsets.only(right: 8),
                   child: IconButton(
                     onPressed: () {
-                      _recipientCtl.clear();
-                      setState(() {
-                        _resolvedRecipient = null;
-                        _resolvedFederation = null;
-                        _federationError = null;
-                        _federationLoading = false;
-                        _federationSuggestions = const [];
-                      });
+                      _publicAddressCtl.clear();
+                      _recipientFlow.setManualPublicAddress('');
                     },
                     icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary),
                     splashRadius: 20,
@@ -1156,7 +1314,62 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
             vertical: 16,
           ),
         ),
-        onChanged: (_) => setState(() {}),
+        onTapOutside: (_) => FocusScope.of(context).unfocus(),
+      ),
+    );
+  }
+
+  Widget _buildFederationInputField(AppColor c, String addr) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? c.background : c.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextField(
+        controller: _federationCtl,
+        textInputAction: TextInputAction.next,
+        keyboardType: TextInputType.multiline,
+        minLines: 1,
+        maxLines: null,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: c.textPrimary,
+          letterSpacing: -0.3,
+          fontFeatures: const [ui.FontFeature.tabularFigures()],
+        ),
+        decoration: InputDecoration(
+          hintText: 'Enter name*$_federationDomain',
+          hintStyle: TextStyle(
+            color: c.textSecondary,
+            fontSize: 14,
+            letterSpacing: -0.2,
+          ),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 16, right: 12),
+            child: Icon(LucideIcons.atSign, color: c.textSecondary, size: 18),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 0),
+          suffixIcon: addr.isNotEmpty
+              ? Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    onPressed: () async {
+                      _federationCtl.clear();
+                      await _recipientFlow.clearFederationSelection();
+                    },
+                    icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary),
+                    splashRadius: 20,
+                  ),
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+        ),
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
       ),
     );
@@ -1166,7 +1379,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: _federationSuggestions
+      children: _recipientState.federationSuggestions
           .map(
             (s) => ActionChip(
               avatar: Icon(LucideIcons.atSign, size: 14, color: c.primary),
@@ -1186,7 +1399,8 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
   }
 
   Widget _buildFederationStatus(AppColor c) {
-    if (_federationLoading) {
+    final input = _recipientState.federationInput.trim();
+    if (_recipientState.federationLoading) {
       return _buildFederationBanner(
         c,
         icon: null,
@@ -1196,16 +1410,27 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
       );
     }
 
-    if (_federationError != null) {
+    if (_recipientState.federationError != null) {
       return _buildFederationBanner(
         c,
         icon: LucideIcons.alertCircle,
-        title: _federationError!,
+        title: _recipientState.federationError!,
         color: c.error,
       );
     }
 
-    final resolved = _resolvedFederation;
+    if (_recipientState.mode == RecipientInputMode.federation &&
+        input.isNotEmpty &&
+        _recipientState.activeValueKind == RecipientValueKind.invalid) {
+      return _buildFederationBanner(
+        c,
+        icon: LucideIcons.info,
+        title: 'Enter a federation address like name*$_federationDomain',
+        color: c.primary,
+      );
+    }
+
+    final resolved = _recipientState.resolvedFederation;
     if (resolved != null && resolved.accountId.trim().isNotEmpty) {
       return _buildFederationBanner(
         c,
@@ -1213,6 +1438,16 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
         title: 'Resolved to ${_shortenAddress(resolved.accountId)}',
         subtitle: resolved.stellarAddress,
         color: c.success,
+        trailing: _recipientState.mode == RecipientInputMode.federation
+            ? IconButton(
+                onPressed: () async {
+                  _federationCtl.clear();
+                  await _recipientFlow.clearFederationSelection();
+                },
+                icon: Icon(LucideIcons.x, size: 16, color: c.textSecondary),
+                splashRadius: 18,
+              )
+            : null,
       );
     }
 
@@ -1226,6 +1461,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     required Color color,
     String? subtitle,
     bool showSpinner = false,
+    Widget? trailing,
   }) {
     return Container(
       width: double.infinity,
@@ -1273,6 +1509,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
               ],
             ),
           ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing],
         ],
       ),
     );
