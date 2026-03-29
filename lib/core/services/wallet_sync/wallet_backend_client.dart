@@ -92,7 +92,7 @@ class WalletBackendClient {
     }
 
     final wallet = await Wallet.from(mnemonic.trim());
-    final keyPair = wallet.getKeyPair(index: 0);
+    final keyPair = await wallet.getKeyPair(index: 0);
     return ensureWalletSession(publicAddress: publicAddress, keyPair: keyPair);
   }
 

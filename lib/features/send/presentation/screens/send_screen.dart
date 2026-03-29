@@ -391,7 +391,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                   children: [
                     _buildAmountCard(c, t, vm, tokenStr),
                     const SizedBox(height: 22),
-                    _buildSectionIntro(c, title: 'Recipient'),
+                    _buildSectionIntro(c, title: ''),
                     const SizedBox(height: 12),
                     _buildRecipientCard(c, t, vm),
                     if (!vm.isXlm) ...[
@@ -399,12 +399,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                       _buildTrustlineStatus(c, t, vm),
                     ],
                     const SizedBox(height: 22),
-                    _buildSectionIntro(c, title: 'Memo'),
+                    _buildSectionIntro(c, title: ''),
                     const SizedBox(height: 12),
                     _buildMemoCard(c, t),
                     if (vm.typedAmount > 0) ...[
                       const SizedBox(height: 22),
-                      _buildSectionIntro(c, title: 'Review'),
+                      _buildSectionIntro(c, title: ''),
                       const SizedBox(height: 12),
                       _buildBreakdownCard(c, t, vm, tokenStr),
                     ],
@@ -461,7 +461,6 @@ class _SendScreenState extends ConsumerState<SendScreen> {
             ],
           ),
           const SizedBox(height: 8),
-         
         ],
       ),
     );
