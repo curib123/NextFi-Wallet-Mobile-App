@@ -74,6 +74,28 @@ class WalletBackendClient {
     return sessionTokenFor(publicAddress);
   }
 
+  Future<String?> ensureCurrentActiveToken() async {
+    final active = await SeedStorage.getActiveWalletMeta();
+    final publicAddress = active?.publicAddress?.trim();
+    if (publicAddress == null || publicAddress.isEmpty) {
+      return null;
+    }
+
+    final cached = await sessionTokenFor(publicAddress);
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+
+    final mnemonic = await SeedStorage.getActiveSeed();
+    if (mnemonic == null || mnemonic.trim().isEmpty) {
+      return null;
+    }
+
+    final wallet = await Wallet.from(mnemonic.trim());
+    final keyPair = wallet.getKeyPair(index: 0);
+    return ensureWalletSession(publicAddress: publicAddress, keyPair: keyPair);
+  }
+
   Future<String?> sessionTokenFor(String publicAddress) async {
     final session = await _readSession(publicAddress);
     if (session == null) return null;
@@ -141,10 +163,14 @@ class WalletBackendClient {
       final cached = await _readSession(normalized);
       if (cached != null) {
         final token = _extractString(cached, const ['token']);
-        final expiresAt = DateTime.tryParse(cached['expiresAt']?.toString() ?? '');
+        final expiresAt = DateTime.tryParse(
+          cached['expiresAt']?.toString() ?? '',
+        );
         if (token.isNotEmpty &&
             expiresAt != null &&
-            expiresAt.isAfter(DateTime.now().toUtc().add(const Duration(seconds: 10)))) {
+            expiresAt.isAfter(
+              DateTime.now().toUtc().add(const Duration(seconds: 10)),
+            )) {
           return token;
         }
       }

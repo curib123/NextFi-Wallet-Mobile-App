@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_notifier.dart';
 import 'package:next_fi/features/contact/data/models/recipient_address_model.dart';
 import 'package:next_fi/app/theme/app_color.dart';
@@ -140,14 +143,14 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
   }
 
   Future<void> _save() async {
-    final prov = ref.read(contactListProvider);
     final notifier = ref.read(contactListProvider.notifier);
 
-    if (prov.loading) {
+    if (ref.read(contactListProvider).loading) {
       await notifier.ensureLoaded();
       if (!mounted) return;
     }
 
+    final prov = ref.read(contactListProvider);
     if (!prov.isAuthenticated) {
       setState(() {
         _statusMessage = 'Open an active wallet session to save recipients.';
@@ -173,7 +176,19 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
     });
     try {
       final name = _name.text.trim();
-      final address = _addr.text.trim();
+      final address = _addr.text.trim().toUpperCase();
+      final activeWalletAddress =
+          ref.read(seedKeypairProvider).accountId?.trim().toUpperCase() ?? '';
+
+      if (activeWalletAddress.isNotEmpty && address == activeWalletAddress) {
+        setState(() {
+          _saving = false;
+          _statusMessage =
+              'You cannot save the active wallet as a recipient. Add a different address instead.';
+          _statusIsError = true;
+        });
+        return;
+      }
 
       if (widget.initial == null) {
         await notifier.add(name: name, address: address, color: _color);
@@ -214,15 +229,50 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
 
   String _friendlyError(Object e) {
     final raw = e.toString();
+    if (raw.contains('You cannot save the active wallet as a recipient')) {
+      return 'You cannot save the active wallet as a recipient.';
+    }
     if (raw.contains('Not authenticated') ||
         raw.contains('401') ||
         raw.contains('wallet session')) {
       return 'Wallet session expired. Reopen the active wallet and try again.';
     }
+    if (raw.contains('HTTP 400:')) {
+      final parsed = _extractBackendMessage(raw);
+      if (parsed != null && parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
     final cleaned = raw.startsWith('Exception: ')
         ? raw.substring('Exception: '.length)
         : raw;
     return 'Failed to save: $cleaned';
+  }
+
+  String? _extractBackendMessage(String raw) {
+    final jsonStart = raw.indexOf('{');
+    if (jsonStart < 0) return null;
+
+    try {
+      final decoded = jsonDecode(raw.substring(jsonStart));
+      if (decoded is Map<String, dynamic>) {
+        final message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+        if (message is List) {
+          final parts = message
+              .map((item) => item.toString().trim())
+              .where((item) => item.isNotEmpty)
+              .toList();
+          if (parts.isNotEmpty) {
+            return parts.join(' ');
+          }
+        }
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   Future<void> _close() async {

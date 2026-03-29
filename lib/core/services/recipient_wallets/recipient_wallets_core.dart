@@ -10,7 +10,8 @@ class RecipientWalletsCore {
   RecipientWalletsCore() {
     svc = RecipientWalletsService(
       baseUrl: centralizedBaseUrl,
-      tokenProvider: () async => WalletBackendClient.I.currentActiveToken(),
+      tokenProvider: () async =>
+          WalletBackendClient.I.ensureCurrentActiveToken(),
     );
   }
 
